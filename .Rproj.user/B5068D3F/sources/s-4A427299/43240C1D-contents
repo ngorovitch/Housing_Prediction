@@ -125,12 +125,13 @@ results <- predict (simplemodel , newdata =  cl_test)
 
 ```{r}
 
-result <- cbind(c(1461:(1461+length(results))), results)
+result<- data.frame(results)
+#result <- cbind(c(1461:(1461+length(results))), results)
 ```
 
 
 ```{r}
-colnames(result) <- c('Id', 'SalePrice')
+#colnames(result) <- c('Id', 'SalePrice')
 write.csv(result, 'submission.csv', row.names = FALSE )
 ```
 

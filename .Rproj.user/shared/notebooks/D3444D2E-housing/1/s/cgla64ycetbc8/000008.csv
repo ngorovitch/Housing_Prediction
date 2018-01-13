@@ -1,2 +1,2 @@
-"0","colnames(result) <- c('Id', 'SalePrice')"
+"0","#colnames(result) <- c('Id', 'SalePrice')"
 "0","write.csv(result, 'submission.csv', row.names = FALSE )"
