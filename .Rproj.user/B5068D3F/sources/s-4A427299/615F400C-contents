@@ -1,0 +1,45 @@
+
+library (tidyverse)
+library (corrplot)
+
+df_train = train
+df_test = test
+df_train$Id = NULL
+df_test$Id = NULL
+df_train$Alley=NULL
+df_train$PoolQC=NULL
+df_train$Fence=NULL
+df_train$MiscFeature=NULL
+df_test$Alley=NULL
+df_test$PoolQC=NULL
+df_test$Fence=NULL
+df_test$MiscFeature=NULL
+
+for(i in 1:ncol(df_train)){
+  if (class(df_train[,i]) == "factor") {
+    df_train[,i] <- as.numeric(as.factor(df_train[,i]))
+  }}
+
+for(i in 1:ncol(df_test)){
+  if (class(df_test[,i]) == "factor") {
+    df_test[,i] <- as.numeric(as.factor(df_test[,i]))
+  }
+}
+
+for(i in 1:ncol(df_train)){
+  if (sum(is.na(df_train[,i])) > 0) {
+    df_train[i][is.na(df_train[i])] <- round(mean(df_train[,i], na.rm = TRUE))
+  }
+}
+
+for(i in 1:ncol(df_test)){
+  if (sum(is.na(df_test[,i])) > 0) {
+    df_test[i][is.na(df_test[i])] <- round(mean(df_test[,i], na.rm = TRUE))
+  }
+}
+
+x=cor(df_train[,unlist(lapply(df_train, is.numeric))])
+corrplot(x, type="upper", order="hclust", method="circle",tl.cex = 0.4)
+
+x=model.matrix(SalePrice~.-1,data=df_train) 
+y=df_train$SalePrice

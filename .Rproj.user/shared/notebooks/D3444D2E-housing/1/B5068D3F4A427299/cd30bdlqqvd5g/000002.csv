@@ -1,0 +1,2 @@
+"0","result <- cbind(c(1461:(1461+length(results))), results)"
+"2","number of rows of result is not a multiple of vector length (arg 2)"

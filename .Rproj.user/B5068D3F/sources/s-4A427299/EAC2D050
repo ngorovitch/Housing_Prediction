@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1515855268813.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2009792621",
+    "id" : "EAC2D050",
+    "lastKnownWriteTime" : 1515856154,
+    "last_content_update" : 1515856154948,
+    "path" : "C:/Users/ngoro/Documents/Housing Kaggle/Housing/submission.csv",
+    "project_path" : "submission.csv",
+    "properties" : {
+        "cursorPosition" : "0,0",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 10,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "text"
+}

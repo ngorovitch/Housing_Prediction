@@ -1,0 +1,170 @@
+---
+title: "Predictions"
+output: html_document
+---
+
+```{r}
+library (tidyverse)
+library (corrplot)
+```
+
+## Data cleaning 
+
+First we are going to have to load the data and clean it
+
+
+```{r}
+
+test <- read.csv("test.csv")
+train <- read.csv("train.csv")
+
+```
+
+We will then need to see how the data looks likes, and what type of data each observation is
+
+```{r}
+str(train)
+```
+
+In here we quickly realise that we have two main type of data type. Either categorical or interger
+
+
+In our next step, we will remove all the collumns that will have more than 15% of NA. Then we will save it in a new dataframe. We will first see what collumn for remove from the raw dataset, and save the result in a new dataframe
+
+```{r}
+
+sort(colSums(sapply(train, is.na)), decreasing =  TRUE)
+
+```
+
+```{r}
+sort(colMeans(is.na(train)), decreasing = TRUE)
+
+```
+
+From the above results we will be removing PoolQC, MiscFeature, Alley, Fence, FireplaceQu and LotFrontage
+
+```{r}
+cl_train = train
+cl_test = test
+cl_train$PoolQC = NULL
+cl_train$MiscFeature = NULL
+cl_train$Alley = NULL
+cl_train$Fence = NULL
+cl_train$FireplaceQu= NULL
+cl_train$LotFrontage = NULL
+cl_test$PoolQC = NULL
+cl_test$MiscFeature = NULL
+cl_test$Alley = NULL
+cl_test$Fence = NULL
+cl_test$FireplaceQu= NULL
+cl_test$LotFrontage = NULL
+
+```
+
+
+
+```{r}
+
+for(i in 1:ncol(cl_train)){
+  if (class(cl_train[,i]) == "factor") {
+    cl_train[,i] <- as.numeric(as.factor(cl_train[,i]))
+  }
+}
+
+for(i in 1:ncol(cl_test)){
+  if (class(cl_test[,i]) == "factor") {
+    cl_test[,i] <- as.numeric(as.factor(cl_test[,i]))
+  }
+}
+
+for(i in 1:ncol(cl_train)){
+  if (sum(is.na(cl_train[,i])) > 0) {
+    cl_train[i][is.na(cl_train[i])] <- round(mean(cl_train[,i], na.rm = TRUE))
+  }
+}
+
+for(i in 1:ncol(cl_test)){
+  if (sum(is.na(cl_test[,i])) > 0) {
+    cl_test[i][is.na(cl_test[i])] <- round(mean(cl_test[,i], na.rm = TRUE))
+  }
+}
+
+```
+
+
+
+
+```{r}
+
+dfnew <- data.frame(cl_train$OverallQual, cl_train$GrLivArea, cl_train$GarageCars, cl_train$GarageArea,
+                    cl_train$TotalBsmtSF, cl_train$X1stFlrSF, cl_train$FullBath, cl_train$TotRmsAbvGrd,
+                    cl_train$YearBuilt)
+
+
+```
+
+
+```{r}
+
+simplemodel <- lm(train$SalePrice ~ OverallQual + GrLivArea + GarageCars + GarageArea + TotalBsmtSF + X1stFlrSF + FullBath + TotRmsAbvGrd + YearBuilt, data = cl_train[1:nrow(cl_train),])
+summary(simplemodel)
+
+
+```
+
+
+
+```{r}
+Price.test <- predict(simplemodel, newdata = cl_train[(nrow(cl_train)+1):nrow(cl_train),])
+```
+
+```{r}
+results <- predict (simplemodel , newdata =  cl_test)
+```
+
+```{r}
+
+result <- cbind(c(1461:(1461+length(results))), results)
+```
+
+
+```{r}
+colnames(result) <- c('Id', 'SalePrice')
+write.csv(result, 'submission.csv', row.names = FALSE )
+```
+
+
+Let's combine the two different datasets
+
+```{r}
+
+dataset.combined <- rbind(within(train, rm('Id','SalePrice')), within(test, rm('Id')))
+```
+
+```{r}
+dataset.combined[is.na(dataset.combined$Alley)]
+```
+
+```{r}
+sort(table(dataset.combined[,'PoolQC']), decreasing = TRUE)
+dataset.combined[(dataset.combined$PoolArea>0) & is.na(dataset.combined$PoolQC), c('PoolQC', 'PoolArea')]
+```
+
+```{r}
+bsmt.cols <-names(dataset.combined)[sapply(names(dataset.combined),
+                                           function(x) str_de)]
+
+```
+
+
+
+```{r}
+dataset.numeric <- dataset.combined[num_features]
+group.df <- dataset.combined[1:1460,]
+group.df$SalePrice <- train$SalePrice
+
+qual.cols <- c('ExterQual', 'ExternCond', 'GarageQual', 'GarageCond', 'FireplaceQu', 'KitchenQual', 'HeatingQC', 'BsmtQual')
+qual.list<- ()
+```
+

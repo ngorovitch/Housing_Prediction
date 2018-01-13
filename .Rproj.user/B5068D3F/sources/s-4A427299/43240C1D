@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1515367795767.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "43240C1D",
+    "lastKnownWriteTime" : 1515693462,
+    "last_content_update" : 1515855765209,
+    "path" : "C:/Users/ngoro/Documents/Housing Kaggle/Housing/housing.Rmd",
+    "project_path" : "housing.Rmd",
+    "properties" : {
+        "cursorPosition" : "127,56",
+        "scrollLine" : "114",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
