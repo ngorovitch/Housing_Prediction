@@ -1,3 +1,0 @@
-"0","dfnew <- data.frame(cl_train$OverallQual, cl_train$GrLivArea, cl_train$GarageCars, cl_train$GarageArea,"
-"0","                    cl_train$TotalBsmtSF, cl_train$X1stFlrSF, cl_train$FullBath, cl_train$TotRmsAbvGrd,"
-"0","                    cl_train$YearBuilt)"

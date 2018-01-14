@@ -1,1 +1,0 @@
-"0","Price.test <- predict(simplemodel, newdata = cl_train[(nrow(cl_train)+1):nrow(cl_train),])"

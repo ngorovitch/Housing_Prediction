@@ -1,0 +1,206 @@
+---
+title: "HousingPredictions"
+output: html_document
+---
+
+```{r}
+library (tidyverse)
+library (corrplot)
+library(tidyr)
+```
+
+```{r}
+
+
+test <- read.csv("test.csv")
+train <- read.csv("train.csv")
+```
+
+
+
+```{r}
+hist(train$SalePrice)
+```
+
+
+```{r}
+train$LogSalePrice <- log(train$SalePrice)
+
+```
+
+
+```{r}
+hist(train$LogSalePrice)
+```
+
+
+
+```{r}
+train[train$GrLivArea>4000&train$SalePrice<2e+05,]$GrLivArea <- mean(train$GrLivArea)%>%as.numeric
+train[train$X1stFlrSF>4000,]$X1stFlrSF <- mean(train$X1stFlrSF)%>%as.numeric
+train[train$LotArea>100000,]$LotArea <- mean(train$LotArea)%>%as.numeric
+
+```
+
+```{r}
+ggplot(train,aes(y=SalePrice,x=GrLivArea))+ggtitle("plots")+geom_point()
+ggplot(train,aes(y=SalePrice,x=X1stFlrSF))+ggtitle("")+geom_point()
+ggplot(train,aes(y=SalePrice,x=LotArea))+ggtitle("")+geom_point()
+```
+
+```{r}
+ggplot(train,aes(y=SalePrice,x=LotArea))+ggtitle("")+geom_point()
+
+```
+
+
+```{r}
+train[train$LotArea>100000,]$LotArea <- mean(train$LotArea)%>%as.numeric
+```
+
+
+```{r}
+sort(colSums(sapply(train, is.na)), decreasing =  TRUE)
+
+```
+
+
+
+
+```{r}
+test$SalePrice <- as.numeric(0)
+test$LogSalePrice <- as.numeric(0)
+dsFull <- rbind(train,test)
+
+```
+
+```{r}
+sort(colSums(sapply(dsFull, is.na)), decreasing =  TRUE)
+
+```
+
+```{r}
+dsFull$LotFrontage[is.na(dsFull$LotFrontage)] <- mean(dsFull$LotFrontage)
+dsFull$MasVnrArea[is.na(dsFull$MasVnrArea)] <- 0
+dsFull$GarageYrBlt[is.na(dsFull$GarageYrBlt)] <- 0
+dsFull$BsmtFullBath[is.na(dsFull$BsmtFullBath)] <- 0
+dsFull$BsmtHalfBath[is.na(dsFull$BsmtHalfBath)] <- 0
+dsFull$BsmtFinSF1[is.na(dsFull$BsmtFinSF1)] <- 0
+dsFull$BsmtFinSF2[is.na(dsFull$BsmtFinSF2)] <- 0
+dsFull$BsmtUnfSF[is.na(dsFull$BsmtUnfSF)] <- 0
+dsFull$TotalBsmtSF[is.na(dsFull$TotalBsmtSF)] <- 0
+dsFull$GarageCars[is.na(dsFull$GarageCars)] <- 0
+dsFull$GarageArea[is.na(dsFull$GarageArea)] <- 0
+```
+
+
+```{r}
+dsFull$PoolQC<- recode(dsFull$PoolQC,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$Alley<- recode(dsFull$Alley,"None"=0,"Grvl"=1,"Pave"=2)
+dsFull$Fence<- recode(dsFull$Fence,"None"=0,"MnWw"=1,"GdWo"=2,"MnPrv"=3,"GdPrv"=4)
+dsFull$FireplaceQu<- recode(dsFull$FireplaceQu,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$GarageFinish<- recode(dsFull$GarageFinish,"None"=0,"Unf"=1,"RFn"=2,"Fin"=3)
+dsFull$GarageQual<- recode(dsFull$GarageQual,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$GarageCond<- recode(dsFull$GarageCond,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$GarageType<- recode(dsFull$GarageType,"None"=0,"2Types"=1,"Attchd"=2,"Basment"=3,"BuiltIn"=4,"CarPort"=5, "Detchd" = 6)
+dsFull$BsmtCond<- recode(dsFull$BsmtCond,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$BsmtExposure<- recode(dsFull$BsmtExposure,"None"=0,"No"=1,"Mn"=2,"Av"=3,"Gd"=4)
+dsFull$BsmtQual<- recode(dsFull$BsmtQual,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$ExterQual<- recode(dsFull$ExterQual,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$ExterCond<- recode(dsFull$ExterCond,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$BsmtFinType1<- recode(dsFull$BsmtFinType1,"None"=0,"Unf"=1,"LwQ"=2,"Rec"=3,"BLQ"=4,"ALQ"=5,"GLQ"=6)
+dsFull$BsmtFinType2<- recode(dsFull$BsmtFinType2,"None"=0,"Unf"=1,"LwQ"=2,"Rec"=3,"BLQ"=4,"ALQ"=5,"GLQ"=6)
+dsFull$HeatingQC<- recode(dsFull$HeatingQC,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$KitchenQual<- recode(dsFull$KitchenQual,"None"=0,"Po"=1,"Fa"=2,"TA"=3,"Gd"=4,"Ex"=5)
+dsFull$Functional<- recode(dsFull$Functional,"None"=0,"Sev"=1,"Maj2"=2,"Maj1"=3,"Mod"=4,"Min2"=5,"Min1"=6,"Typ"=7)
+dsFull$MSZoning<- recode(dsFull$MSZoning,"None"=0,"A"=1,"C"=2,"FV"=3,"I"=4,"RH"=5,"RL"=6,"RP"=7, "RM" = 8)
+
+
+
+#Adding an important feature - Total area of basement
+dsFull$TotalSF = dsFull$TotalBsmtSF + dsFull$X1stFlrSF + dsFull$X2ndFlrSF
+```
+Elev	Elevator
+       Gar2	2nd Garage (if not described in garage section)
+       Othr	Other
+       Shed	Shed (over 100 SF)
+       TenC	Tennis Court
+       NA	None
+```{r}
+dsFull$MiscFeature<- recode(dsFull$MiscFeature,"None"=0,"Elev"=1,"Gar2"=2,"Othr"=3,"Shed"=4,"TenC"=5)
+dsFull$MasVnrType[is.na(dsFull$ManVnrType)] <- "None"
+dsFull$Utilities[is.na(dsFull$Utilities)] <- "AllPub"
+dsFull$Exterior1st[is.na(dsFull$Exterior1st)] <- "VinylSd"
+dsFull$Exterior2nd[is.na(dsFull$Exterior2nd)] <- "VinylSd"
+dsFull$Electrical[is.na(dsFull$Electrical)] <- "SBrkr"
+dsFull$SaleType[is.na(dsFull$SaleType)] <- "WD"
+```
+
+
+```{r}
+sort(colSums(sapply(dsFull, is.na)), decreasing =  TRUE)
+```
+
+```{r}
+for(i in 1:ncol(dsFull)){
+  if (sum(is.na(dsFull[,i])) > 0) {
+    dsFull[i][is.na(dsFull[i])] <- 0
+  }
+}
+```
+
+
+```{r}
+
+dsFullNum <- for(i in 1:ncol(dsFull)){
+  if (class(dsFull[,i]) == "factor") {
+    dsFull[,i] <- as.numeric(as.factor(dsFull[,i]))
+  }
+}
+
+```
+
+```{r}
+
+train.2 <- dsFull[1:1460,]
+test.2 <- dsFull[1461:2919,]
+
+```
+
+
+Model One Multivariate Linear Regression
+
+```{r}
+
+
+LR <-lm(formula = SalePrice ~., data = train.2)
+summary(LR)
+predictionLr<- predict(LR,test.2, type="response")
+rmse(train.2$SalePrice,predictionLr)
+```
+
+
+```{r}
+library(caret)
+trainF <- dsFull[1:1460,]
+testF <- dsFull[1461:2919,]
+in_train <- createDataPartition(trainF$SalePrice,p=0.7,list=F)
+train3 <- trainF[in_train,]
+validation <- trainF[-in_train,]
+```
+
+```{r}
+lr <-lm(formula = SalePrice ~., data = train3) 
+summary(lr)
+prediction<- predict(lr,validation, type="response")
+rmse(validation$SalePrice,prediction)
+```
+
+
+```{r}
+myformula <- SalePrice~.
+modfit <- train(myformula,method="rpart",data=new_train)
+prediction_2 <- predict(modfit,newdata =validation)
+rmse(validation$SalePrice,prediction_2)
+```
+
