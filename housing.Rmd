@@ -6,6 +6,7 @@ output: html_document
 ```{r}
 library (tidyverse)
 library (corrplot)
+library(Metrics)
 ```
 
 ## Data cleaning 
@@ -44,21 +45,26 @@ sort(colMeans(is.na(train)), decreasing = TRUE)
 
 From the above results we will be removing PoolQC, MiscFeature, Alley, Fence, FireplaceQu and LotFrontage
 
+
+```{r}
+cl_train = data.frame(Id=Id, OverallQual + GrLivArea + GarageCars + GarageArea + TotalBsmtSF + X1stFlrSF + YearBuilt)
+```
+
 ```{r}
 cl_train = train
 cl_test = test
-cl_train$PoolQC = NULL
-cl_train$MiscFeature = NULL
-cl_train$Alley = NULL
-cl_train$Fence = NULL
-cl_train$FireplaceQu= NULL
-cl_train$LotFrontage = NULL
-cl_test$PoolQC = NULL
-cl_test$MiscFeature = NULL
-cl_test$Alley = NULL
-cl_test$Fence = NULL
-cl_test$FireplaceQu= NULL
-cl_test$LotFrontage = NULL
+cl_train$PoolQC = mean(cl_train$PoolQC)
+cl_train$MiscFeature =  mean(cl_train$PoolQC)
+cl_train$Alley =  mean(cl_train$PoolQC)
+cl_train$Fence = 0
+cl_train$FireplaceQu= 0
+cl_train$LotFrontage = 0
+cl_test$PoolQC = 0
+cl_test$MiscFeature = 0
+cl_test$Alley = 0
+cl_test$Fence = 0
+cl_test$FireplaceQu= 0
+cl_test$LotFrontage = 0
 
 ```
 
@@ -107,7 +113,7 @@ dfnew <- data.frame(cl_train$OverallQual, cl_train$GrLivArea, cl_train$GarageCar
 
 ```{r}
 
-simplemodel <- lm(train$SalePrice ~ OverallQual + GrLivArea + GarageCars + GarageArea + TotalBsmtSF + X1stFlrSF + FullBath + TotRmsAbvGrd + YearBuilt, data = cl_train[1:nrow(cl_train),])
+simplemodel <- lm(train$SalePrice ~ OverallQual + GrLivArea + GarageCars + GarageArea + TotalBsmtSF + X1stFlrSF + YearBuilt, data = cl_train[1:nrow(cl_train),])
 summary(simplemodel)
 
 
@@ -128,6 +134,13 @@ results <- predict (simplemodel , newdata =  cl_test)
 result<- data.frame(results)
 #result <- cbind(c(1461:(1461+length(results))), results)
 ```
+
+```{r}
+
+submission <- data.frame(Id = test$Id, SalePrice= results)
+write.csv(submission, "submission1.csv", row.names = FALSE)
+```
+
 
 
 ```{r}
