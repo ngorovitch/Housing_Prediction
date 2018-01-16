@@ -88,10 +88,11 @@ testing.set = Replacing.NAs(testing.set)
 head(training.set)
 ```
 
-Remove the camp Id from the Data cause it's useless in findind the price of the house
+Remove the camp Id from the Data since it's useless in findind the price of the house. then substitute saleprice by log(saleprice)
 
 ```{r}
 training.set <- subset(training.set, select = -Id )
+training.set$SalePrice = log(training.set$SalePrice)
 head(training.set)
 ```
 
