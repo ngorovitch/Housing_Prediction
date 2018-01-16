@@ -1,0 +1,129 @@
+---
+title: "House Prediction"
+output:
+  html_document: default
+  html_notebook: default
+---
+##Quick look at the dataset
+First we read in our data:
+
+```{r}
+#stringsAsFactors is used here to be able later to convert non numerical to numerical
+training.set <- read.csv("train.csv", stringsAsFactors=FALSE)
+testing.set <- read.csv("test.csv", stringsAsFactors=FALSE)
+
+```
+
+Overview on the data
+```{r}
+head(training.set)
+```
+
+##Handle non numerical columns
+
+```{r}
+#this function convert all the data to numeric
+handle_Non_Numerical_columns <- function(data){
+  
+#for each field or column
+for (field in 1:NCOL(data)){
+      if (!is.numeric(data[1, field])){
+        
+        allValues = c()
+        #creating a set of all the values of the column
+        #for each value in the field
+        for (value in data[, field]){
+          if ((!value %in% allValues) && !is.na(value)){
+            allValues = c(allValues, value)
+          }
+        }
+        
+        
+        #browse the column and substitute the values by their numerical corresponding
+        #for each value in the field
+        pos = 1
+        for (value in data[, field]){
+          #the function match returns the position of value in the list allValues
+          data[pos, field] = match(value, allValues)
+          pos = pos + 1
+          
+        }
+        
+      }
+#convert the column in numeric
+data[,field] = as.numeric(data[,field])
+}
+  
+return(data)
+}
+
+training.set = handle_Non_Numerical_columns(training.set)
+testing.set = handle_Non_Numerical_columns(testing.set)
+
+head(training.set)
+```
+
+##Dealing with the NAs
+
+At this point, all our fields are numerical but we still have a lot of NAs values. to solve this we will:
+first test for NA and NaN using is.na and is.nan. After what we will use a common way to deal with these invalid numbers wich is to replace them with the mean or median of the other available data.
+
+
+```{r}
+#this function replaces all NAs of the dataset by the mean or median of the coresponding field
+Replacing.NAs <- function(data){
+    for (field in 1:NCOL(data)){
+          #compute the mean
+              field.mean <- median(data[,field], na.rm=TRUE)
+          #substitute all the NAs by the mean
+               data[is.na(data[,field]), field] <- field.mean
+          
+    }
+return(data)
+}
+
+training.set = Replacing.NAs(training.set)
+testing.set = Replacing.NAs(testing.set)
+
+head(training.set)
+```
+
+Remove the camp Id from the Data cause it's useless in findind the price of the house
+
+```{r}
+training.set <- subset(training.set, select = -Id )
+head(training.set)
+```
+
+
+Let's do the linear regression
+
+```{r}
+first.lm <- lm(training.set$SalePrice ~ ., training.set)
+sm <- summary(first.lm)
+sm
+
+```
+
+Let's predict the house prices
+
+```{r}
+SalePrice <- predict(first.lm, newdata = testing.set)
+SalePrice<-data.frame(SalePrice)
+head(SalePrice)
+
+#library (tidyverse)
+#library (Metrics)
+
+#rmse(SalePrice, training.set$SalePrice)
+```
+
+product the submission file
+
+```{r}
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission.csv", quote = FALSE, row.names = FALSE)
+```
