@@ -88,11 +88,26 @@ testing.set = Replacing.NAs(testing.set)
 head(training.set)
 ```
 
-Remove the camp Id from the Data since it's useless in findind the price of the house. then substitute saleprice by log(saleprice)
+Remove the camp Id from the Data since it's useless in findind the price of the house. then computing the log(saleprice) cause it's normally distributed and then it's better for linear regression
 
 ```{r}
-training.set <- subset(training.set, select = -Id )
-training.set$SalePrice = log(training.set$SalePrice)
+#training.set <- subset(training.set, select = -Id )
+#testing.set <- subset(testing.set, select = -Id )
+
+#select variables that be used for model
+model_var <- c('SalePrice', 
+                'OverallQual','OverallCond','YearBuilt','ExterCond',
+                'TotalBsmtSF','HeatingQC', 
+                'CentralAir','GrLivArea','BedroomAbvGr','KitchenAbvGr',
+                'TotRmsAbvGrd','Fireplaces',
+                'GarageArea','OpenPorchSF','PoolArea',
+                 'YrSold')
+
+
+training.set <- training.set[, model_var]
+
+training.set$LogSalePrice = log(training.set$SalePrice)
+
 head(training.set)
 ```
 
@@ -100,23 +115,41 @@ head(training.set)
 Let's do the linear regression
 
 ```{r}
-first.lm <- lm(training.set$SalePrice ~ ., training.set)
-sm <- summary(first.lm)
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set)[1]), dim(training.set)[1]*0.8)
+model_lin_train = training.set[train.index,]
+model_lin_valid <- training.set[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+sm <- summary(linreg)
 sm
 
 ```
 
-Let's predict the house prices
+Let's do the cross validation by using the model to do prediction on the other 20% of the data
 
 ```{r}
-SalePrice <- predict(first.lm, newdata = testing.set)
-SalePrice<-data.frame(SalePrice)
-head(SalePrice)
+library(forecast)
 
-#library (tidyverse)
-#library (Metrics)
+SalePrice1 <- predict(linreg, newdata = model_lin_valid)
+#SalePrice1 <- data.frame(SalePrice1)
+#head(SalePrice1)
 
-#rmse(SalePrice, training.set$SalePrice)
+residuals <- model_lin_valid$LogSalePrice - SalePrice1
+linreg_pred <- data.frame("Predicted" = SalePrice1, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+View(accuracy(SalePrice1, model_lin_valid$LogSalePrice))
+```
+
+Now let's use the model predict the House prices of the testing set
+
+```{r}
+SalePrice2 <- predict(linreg, newdata = testing.set)
+SalePrice <- exp(SalePrice2)
 ```
 
 product the submission file
@@ -128,3 +161,20 @@ head(y)
 # Save prediction to My_Submission.csv
 write.csv(y,file="My_Submission.csv", quote = FALSE, row.names = FALSE)
 ```
+
+Let't use the XGBoost tool to get a better model
+
+```{r}
+library(xgboost)
+# load data
+# fit model
+bst <- xgboost(data = data.matrix(model_lin_train), label = model_lin_train$LogSalePrice, max.depth = 2, eta = 0.3, nround = 30, nthread = 2, objective = "reg:linear")
+# predict
+pred <- predict(bst, data.matrix(model_lin_valid))
+
+
+residuals <- model_lin_valid$LogSalePrice - pred
+xgb_pred <- data.frame("Predicted" = pred, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+View(accuracy(pred, model_lin_valid$LogSalePrice))
+```
+
