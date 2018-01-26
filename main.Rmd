@@ -1,0 +1,180 @@
+---
+title: "House Prediction"
+output:
+  html_document: default
+  html_notebook: default
+---
+##Quick look at the dataset
+First we read in our data:
+
+```{r}
+#stringsAsFactors is used here to be able later to convert non numerical to numerical
+training.set <- read.csv("train.csv", stringsAsFactors=FALSE)
+testing.set <- read.csv("test.csv", stringsAsFactors=FALSE)
+
+```
+
+Overview on the data
+```{r}
+head(training.set)
+```
+
+##Handle non numerical columns
+
+```{r}
+#this function convert all the data to numeric
+handle_Non_Numerical_columns <- function(data){
+  
+#for each field or column
+for (field in 1:NCOL(data)){
+      if (!is.numeric(data[1, field])){
+        
+        allValues = c()
+        #creating a set of all the values of the column
+        #for each value in the field
+        for (value in data[, field]){
+          if ((!value %in% allValues) && !is.na(value)){
+            allValues = c(allValues, value)
+          }
+        }
+        
+        
+        #browse the column and substitute the values by their numerical corresponding
+        #for each value in the field
+        pos = 1
+        for (value in data[, field]){
+          #the function match returns the position of value in the list allValues
+          data[pos, field] = match(value, allValues)
+          pos = pos + 1
+          
+        }
+        
+      }
+#convert the column in numeric
+data[,field] = as.numeric(data[,field])
+}
+  
+return(data)
+}
+
+training.set = handle_Non_Numerical_columns(training.set)
+testing.set = handle_Non_Numerical_columns(testing.set)
+
+head(training.set)
+```
+
+##Dealing with the NAs
+
+At this point, all our fields are numerical but we still have a lot of NAs values. to solve this we will:
+first test for NA and NaN using is.na and is.nan. After what we will use a common way to deal with these invalid numbers wich is to replace them with the mean or median of the other available data.
+
+
+```{r}
+#this function replaces all NAs of the dataset by the mean or median of the coresponding field
+Replacing.NAs <- function(data){
+    for (field in 1:NCOL(data)){
+          #compute the mean
+              field.mean <- median(data[,field], na.rm=TRUE)
+          #substitute all the NAs by the mean
+               data[is.na(data[,field]), field] <- field.mean
+          
+    }
+return(data)
+}
+
+training.set = Replacing.NAs(training.set)
+testing.set = Replacing.NAs(testing.set)
+
+head(training.set)
+```
+
+Remove the camp Id from the Data since it's useless in findind the price of the house. then computing the log(saleprice) cause it's normally distributed and then it's better for linear regression
+
+```{r}
+#training.set <- subset(training.set, select = -Id )
+#testing.set <- subset(testing.set, select = -Id )
+
+#select variables that be used for model
+model_var <- c('SalePrice', 
+                'OverallQual','OverallCond','YearBuilt','ExterCond',
+                'TotalBsmtSF','HeatingQC', 
+                'CentralAir','GrLivArea','BedroomAbvGr','KitchenAbvGr',
+                'TotRmsAbvGrd','Fireplaces',
+                'GarageArea','OpenPorchSF','PoolArea',
+                 'YrSold')
+
+
+training.set <- training.set[, model_var]
+
+training.set$LogSalePrice = log(training.set$SalePrice)
+
+head(training.set)
+```
+
+
+Let's do the linear regression
+
+```{r}
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set)[1]), dim(training.set)[1]*0.8)
+model_lin_train = training.set[train.index,]
+model_lin_valid <- training.set[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+sm <- summary(linreg)
+sm
+
+```
+
+Let's do the cross validation by using the model to do prediction on the other 20% of the data
+
+```{r}
+library(forecast)
+
+SalePrice1 <- predict(linreg, newdata = model_lin_valid)
+#SalePrice1 <- data.frame(SalePrice1)
+#head(SalePrice1)
+
+residuals <- model_lin_valid$LogSalePrice - SalePrice1
+linreg_pred <- data.frame("Predicted" = SalePrice1, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+View(accuracy(SalePrice1, model_lin_valid$LogSalePrice))
+```
+
+Now let's use the model predict the House prices of the testing set
+
+```{r}
+SalePrice2 <- predict(linreg, newdata = testing.set)
+SalePrice <- exp(SalePrice2)
+```
+
+product the submission file
+
+```{r}
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission.csv", quote = FALSE, row.names = FALSE)
+```
+
+Let't use the XGBoost tool to get a better model
+
+```{r}
+library(xgboost)
+# load data
+# fit model
+bst <- xgboost(data = data.matrix(model_lin_train), label = model_lin_train$LogSalePrice, max.depth = 2, eta = 0.3, nround = 30, nthread = 2, objective = "reg:linear")
+# predict
+pred <- predict(bst, data.matrix(model_lin_valid))
+
+
+residuals <- model_lin_valid$LogSalePrice - pred
+xgb_pred <- data.frame("Predicted" = pred, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+View(accuracy(pred, model_lin_valid$LogSalePrice))
+```
+
