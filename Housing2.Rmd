@@ -7,6 +7,8 @@ output: html_document
 library (tidyverse)
 library (corrplot)
 library(tidyr)
+library(Metrics)
+library(randomForest)
 ```
 
 ```{r}
@@ -173,11 +175,12 @@ Model One Multivariate Linear Regression
 ```{r}
 
 
-LR <-lm(formula = SalePrice ~., data = train.2)
+LR <-lm(formula = LogSalePrice ~. -SalePrice - MasVnrType, data = train.2)
 summary(LR)
 predictionLr<- predict(LR,test.2, type="response")
 rmse(train.2$SalePrice,predictionLr)
 ```
+
 
 
 ```{r}
@@ -202,5 +205,26 @@ myformula <- SalePrice~.
 modfit <- train(myformula,method="rpart",data=new_train)
 prediction_2 <- predict(modfit,newdata =validation)
 rmse(validation$SalePrice,prediction_2)
+```
+
+
+```{r}
+
+randomForestTest <- randomForest(formula = SalePrice ~.  -MasVnrType -LogSalePrice, data = train.2, na.action = na.omit)
+prediction.RandomForest <- predict(randomForestTest, newdata= test.2)
+#rmse(train.2$SalePrice,prediction.RandomForest)
+```
+
+```{r}
+res <- cbind(c(1461:(1461 + length(prediction.RandomForest))), prediction.RandomForest)
+colnames(res)<-c('Id', 'SalePrice')
+write.csv(res, 'submissionRandomForest.csv', row.names = FALSE)
+
+
+```
+
+```{r}
+y.true <- t
+
 ```
 

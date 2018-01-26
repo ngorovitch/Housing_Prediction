@@ -85,6 +85,8 @@ return(data)
 training.set = Replacing.NAs(training.set)
 testing.set = Replacing.NAs(testing.set)
 
+training.set.full = Replacing.NAs(training.set)
+testing.set.full = Replacing.NAs(testing.set)
 head(training.set)
 ```
 
@@ -176,5 +178,40 @@ pred <- predict(bst, data.matrix(model_lin_valid))
 residuals <- model_lin_valid$LogSalePrice - pred
 xgb_pred <- data.frame("Predicted" = pred, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
 View(accuracy(pred, model_lin_valid$LogSalePrice))
+```
+
+
+```{r}
+FullData.set <- rbind(training.set.full[,-81],testing.set.full)
+
+train.rf <- cbind(FullData.set[1:1460,],training.set.full[,81])
+test.rf <- FullData.set[-(1:1460),-81]
+
+names(test.rf) = names(testing.set)
+names(train.rf) = names(training.set)
+```
+
+
+
+
+```{r}
+library(randomForest)
+randomForestTest <- randomForest(SalePrice ~ ., data=train.rf,ntree=500)
+plot(randomForestTest)
+
+```
+
+```{r}
+prediction.RandomForest <- predict(randomForestTest,test.rf,type="response")
+```
+
+```{r}
+varImpPlot(randomForestTest,n.var = 10)
+```
+
+```{r}
+submit.randomforest <- cbind(test.rf$Id,prediction.RandomForest)
+write.table(submit.randomforest,file="submissionRF.csv",sep=",",
+            quote=FALSE,col.names=c("Id","SalePrice"),row.names=FALSE)
 ```
 
