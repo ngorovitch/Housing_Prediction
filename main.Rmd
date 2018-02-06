@@ -215,3 +215,119 @@ write.table(submit.randomforest,file="submissionRF.csv",sep=",",
             quote=FALSE,col.names=c("Id","SalePrice"),row.names=FALSE)
 ```
 
+
+```{r}
+library(corrplot)
+library(Metrics)
+library(randomForest)
+```
+
+```{r}
+cor.par= cor(training.set, use = "everything")
+png(height=1200, width=1500, pointsize=15, file="correlations.png")
+corrplot(cor.par, method = "shade", type="upper", sig.level = 0.01, insig = "blank")
+```
+
+
+From the correlation plot we realize that the price has a positive correlation witg the overall quality. From that, the overall quality is set between 1 to 10, we can use that to create new features. For example, it is safe to assume newer houses should be more expensive than older ones. So we will be using the overall quality to create new indicators.
+
+```{r}
+train.II = training.set
+```
+```{r}
+train.II$QualTime = train.II$OverallQual * train.II$YearBuilt
+train.II$QualRemodTime = train.II$OverallQual * train.II$YearRemodAdd
+train.II$QualBasement = train.II$OverallQual * train.II$TotalBsmtSF
+train.II$QualBathrooms = train.II$OverallQual * train.II$FullBath
+train.II$QualLivingArea = train.II$OverallQual * train.II$GrLivArea
+train.II$QualExterior = train.II$OverallQual * train.II$ExterCond
+
+```
+
+
+Lets have a look at the data again
+
+```{r}
+png(height=1200, width=1500, pointsize=15, file="trainII.png")
+corrplot(cor(train.II, use = "everything"), method = "shade", type="upper", sig.level = 0.01, insig = "blank")
+```
+
+
+```{r}
+train.II$TotalArea = train.II$TotalBsmtSF + train.II$X1stFlrSF + train.II$X2ndFlrSF
+train.II$QualTotalArea = train.II$OverallQual * train.II$TotalArea
+```
+
+```{r}
+
+```
+
+
+RUNNING MODEL ON NEW DATASET
+
+```{r}
+
+train.index <- sample(c(1:dim(train.II)[1]), dim(train.II)[1]*0.8)
+model_train = train.II[train.index,]
+model_test <- train.II[-train.index,]
+
+```
+
+LINEAR MODEL
+
+```{r}
+set.seed(123)
+lin_model = lm(SalePrice ~., data = model_train)
+summary(lin_model)
+
+
+```
+
+
+```{r}
+prediction <- predict(lin_model, model_test, type="response")
+pred_lm <- cbind(model_test, prediction)
+
+pred_lm$log_prediction <- log(pred_lm$prediction)
+pred_lm$log_SalePrice <- log(pred_lm$SalePrice)
+
+rmse(pred_lm$log_SalePrice,pred_lm$log_prediction)
+```
+
+
+
+Run the same lm on the significan ones
+
+```{r}
+linear_sig = lm(SalePrice ~ LotArea+Condition2+OverallQual+OverallCond+YearRemodAdd+RoofMatl+BsmtFinSF1+BsmtFinSF2 
+                    +BsmtUnfSF +KitchenQual+GarageCars+WoodDeckSF +ScreenPorch +PoolQC+QualRemodTime , data=train.II)
+```
+
+```{r}
+prediction <- predict(linear_sig, model_test, type="response")
+pred_lm <- cbind(model_test, prediction)
+
+pred_lm$log_prediction <- log(pred_lm$prediction)
+pred_lm$log_SalePrice <- log(pred_lm$SalePrice)
+
+rmse(pred_lm$log_SalePrice,pred_lm$log_prediction)
+```
+
+
+RANDOM FOREST 
+
+```{r}
+rf_mod = randomForest(SalePrice~., data= model_train)
+
+prediction <- predict(rf_mod, model_test)
+pred_rf <- cbind(model_test, prediction)
+
+pred_rf$log_prediction <- log(pred_rf$prediction)
+pred_rf$log_SalePrice <- log(pred_rf$SalePrice)
+
+rmse(pred_rf$log_SalePrice,pred_rf$log_prediction)
+```
+
+
+
+
