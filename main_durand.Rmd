@@ -1,0 +1,399 @@
+---
+title: "House Prediction"
+output:
+  html_document: default
+  html_notebook: default
+---
+##Quick look at the dataset
+First we read in our data:
+
+```{r}
+#stringsAsFactors is used here to be able later to convert non numerical to numerical
+training.set.full <- read.csv("train.csv", stringsAsFactors=FALSE)
+testing.set.full <- read.csv("test.csv", stringsAsFactors=FALSE)
+```
+
+Overview on the data
+```{r}
+head(training.set.full)
+```
+
+##Handle non numerical columns
+
+Here we implement a function to convert all cathegorical data to numerical
+```{r}
+#this function convert all the data to numeric
+handle_Non_Numerical_columns <- function(data){
+  
+#for each field or column
+for (field in 1:NCOL(data)){
+      if (!is.numeric(data[1, field])){
+        
+        allValues = c()
+        #creating a set of all the values of the column
+        #for each value in the field
+        for (value in data[, field]){
+          if ((!value %in% allValues) && !is.na(value)){
+            allValues = c(allValues, value)
+          }
+        }
+        
+        
+        #browse the column and substitute the values by their numerical corresponding
+        #for each value in the field
+        pos = 1
+        for (value in data[, field]){
+          #the function match returns the position of value in the list allValues
+          data[pos, field] = match(value, allValues)
+          pos = pos + 1
+          
+        }
+        
+      }
+#convert the column in numeric
+data[,field] = as.numeric(data[,field])
+}
+  
+return(data)
+}
+
+training.set.full = handle_Non_Numerical_columns(training.set.full)
+testing.set.full = handle_Non_Numerical_columns(testing.set.full)
+
+
+head(training.set.full)
+```
+
+We wanna check for each column if the number of NA's is greather than the number of available values. In which case we will check the meaning of NA for the relative column and eventually drop it since it would not be a good influencer on the final prediction
+
+```{r}
+#number of rows in the data set
+c(Number_of_rows_in_data_set = NROW(training.set.full))
+print("")
+
+#counting the number of NA values for each independent variable
+na_count <-sapply(training.set.full, function(y) sum(length(which(is.na(y)))))
+
+#maintaining only variable with at least 1 NA value
+to_remove = c()
+for (i in 1:length(na_count)){
+  if(na_count[[i]] == 0){
+    to_remove = c(to_remove, i)
+  }
+}
+na_count = na_count[-to_remove]
+na_count
+```
+
+the first column(Id) of the data frame represent an identifier for each observation wich is useless since it has almost no relationship with the SalePrice.
+
+We need to analuse these 19 variables to see whether the actual meaning of NA is not available(in the sense of infortion not given) or not.  
+LotFrontage: NA => not available  
+Alley: NA => No alley access  
+MasVnrType: NA => Not availabe  
+MasVnrArea: NA => Not available  
+BsmtQual: NA => No Basement  
+BsmtCond: NA => No Basement  
+BsmtExposure: NA => No Basement  
+BsmtFinType1: NA => No Basement  
+BsmtFinType2: NA => No Basement  
+Electrical: NA => not available  
+FireplaceQu: NA => No Fireplace  
+GarageType: NA => No Garage  
+GarageYrBlt: NA => No Garage  
+GarageFinish: NA => No Garage  
+GarageQual: NA => No Garage  
+GarageCond
+
+
+The columns we are for sure going to drop here are: PoolQC(1453 missing values), MiscFeature (1406) ad Fence(1179) since they contain to many NA's values.
+LotFrontage and FireplaceQu have respectively 259/1460 and 690/1460 missing values. Not more than a half but enough to capture our attention. To be sure that we should keep this variables, we are going to look at the relationship between them and the SalePrice.
+
+```{r}
+par(mfrow=c(2,1))
+
+plot(training.set.full$SalePrice, training.set.full$LotFrontage, main="Relationship between SalePrice & LotFrontage", xlab="SalePrice", ylab="LotFrontage", pch=19)
+
+cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, LotFrontage = training.set.full$LotFrontage)))
+
+plot(training.set.full$SalePrice, training.set.full$FireplaceQu, main="Relationship between SalePrice & FireplaceQu", xlab="SalePrice", ylab="FireplaceQu", pch=19)
+
+cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, FireplaceQu = training.set.full$FireplaceQu)))
+
+```
+
+The plot shows to us a relatively weak positive correlation between SalePrice and LotFrontage (0.35) and an extremely weak correlation between SalePrice and FireplaceQu(0.04).
+
+wich make sense cause the Linear feet of street connected to a property should influence only a bit on the house price.  The numerical value of this correlation is about 0.35. wich motivates us to drop this column from our data.
+
+
+
+```{r}
+for (var in 1:NCOL(training.set.full)){
+  var_name = names(training.set.full)[var]
+  
+  print(paste0(var_name, ""))
+  print(cor(cbind(SalePrice = training.set.full$SalePrice, Other_variable = training.set.full[,paste0(var_name, "")])))
+  
+}
+```
+
+
+##Dealing with the NAs
+
+At this point, all our fields are numerical but we still have a lot of NAs values. to solve this issue, we will:
+first test for NA and NaN using is.na and is.nan. After what we will use a common way to deal with these invalid numbers wich is to replace them with the mean or median of the other available data.
+
+
+```{r}
+#this function replaces all NAs of the dataset by the mean or median of the coresponding field
+Replacing.NAs <- function(data){
+    for (field in 1:NCOL(data)){
+          #compute the mean
+              field.mean <- median(data[,field], na.rm=TRUE)
+          #substitute all the NAs by the mean
+               data[is.na(data[,field]), field] <- field.mean
+          
+    }
+return(data)
+}
+
+training.set.full = Replacing.NAs(training.set.full)
+testing.set.full = Replacing.NAs(testing.set.full)
+
+training.set.full = Replacing.NAs(training.set.full)
+testing.set.full = Replacing.NAs(testing.set.full)
+head(training.set.full)
+```
+
+Here we choose a set of variables that we think are best estimators for the price. and we compute the log(saleprice) cause it's normally distributed and then it's better for linear regression
+
+```{r}
+#training.set.full <- subset(training.set.full, select = -Id )
+#testing.set.full <- subset(testing.set.full, select = -Id )
+
+#select variables that be used for model
+model_var <- c('SalePrice', 
+                'OverallQual','OverallCond','YearBuilt','ExterCond',
+                'TotalBsmtSF','HeatingQC', 
+                'CentralAir','GrLivArea','BedroomAbvGr','KitchenAbvGr',
+                'TotRmsAbvGrd','Fireplaces',
+                'GarageArea','OpenPorchSF','PoolArea',
+                 'YrSold')
+
+
+training.set.full <- training.set.full[, model_var]
+
+training.set.full$LogSalePrice = log(training.set.full$SalePrice)
+
+head(training.set.full)
+```
+
+
+Let's do the linear regression
+
+```{r}
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_lin_train = training.set.full[train.index,]
+model_lin_valid <- training.set.full[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+sm <- summary(linreg)
+sm
+
+```
+
+Let's do the cross validation by using the model to do prediction on the other 20% of the data in order to evaluate our model
+
+```{r}
+library(forecast)
+
+SalePrice1 <- predict(linreg, newdata = model_lin_valid)
+#SalePrice1 <- data.frame(SalePrice1)
+#head(SalePrice1)
+
+residuals <- model_lin_valid$LogSalePrice - SalePrice1
+linreg_pred <- data.frame("Predicted" = SalePrice1, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+linreg_pred
+accuracy(SalePrice1, model_lin_valid$LogSalePrice)
+```
+
+The RMSE is about 0.1642516 wich is actually not that bad. But how to improve this result?
+Now let's use the model to predict the House prices of the testing set
+
+```{r}
+SalePrice2 <- predict(linreg, newdata = testing.set.full)
+SalePrice <- exp(SalePrice2)
+```
+
+product the submission file
+
+```{r}
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission.csv", quote = FALSE, row.names = FALSE)
+```
+
+Now let's try with Random forest and see if the RMSE decreases
+```{r}
+library(randomForest)
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_rf_train = training.set.full[train.index,]
+model_rf_valid <- training.set.full[-train.index,]
+
+model_rf_train <- subset(model_rf_train, select = -SalePrice)
+
+randomForestTest <- randomForest(LogSalePrice ~ ., data = model_rf_train, ntree=500)
+plot(randomForestTest)
+```
+
+Let's do the cross validation by using the model to do prediction on the other 20% of the data in order to evaluate the model
+
+```{r}
+prediction.RandomForest <- predict(randomForestTest, model_rf_valid, type="response")
+
+residuals <- model_rf_valid$LogSalePrice - prediction.RandomForest
+rf_pred <- data.frame("Predicted" = prediction.RandomForest, "Actual" = model_rf_valid$LogSalePrice, "Residual" = residuals)
+rf_pred
+accuracy(prediction.RandomForest, model_lin_valid$LogSalePrice)
+```
+
+The RMSE is 0.1515908 wich is not a great improvement of the previous. In fact, we need to work a bit more
+
+```{r}
+varImpPlot(randomForestTest)
+```
+
+
+Now we wanna choose wisely the variable to include into the model
+```{r}
+library(corrplot)
+library(Metrics)
+library(randomForest)
+```
+
+for that we import again all the data and we handle again non numerical and missing values
+
+```{r}
+training.set <- read.csv("train.csv", stringsAsFactors=FALSE)
+testing.set <- read.csv("test.csv", stringsAsFactors=FALSE)
+
+training.set = handle_Non_Numerical_columns(training.set)
+training.set = Replacing.NAs(training.set)
+testing.set = handle_Non_Numerical_columns(testing.set)
+testing.set = Replacing.NAs(testing.set)
+
+cor.par= cor(training.set, use = "everything")
+#png(height=1200, width=1500, pointsize=15, file="correlations.png")
+corrplot(cor.par, method = "shade", type="upper", sig.level = 0.01, insig = "blank")
+```
+
+From the correlation plot we realize that the price has a positive correlation with the overall quality. From that, the overall quality is set between 1 to 10, we can use that to create new features. For example, it is safe to assume newer houses should be more expensive than older ones. So we will be using the overall quality to create new indicators.
+
+```{r}
+train.II = training.set
+
+train.II$QualTime = train.II$OverallQual * train.II$YearBuilt
+train.II$QualRemodTime = train.II$OverallQual * train.II$YearRemodAdd
+train.II$QualBasement = train.II$OverallQual * train.II$TotalBsmtSF
+train.II$QualBathrooms = train.II$OverallQual * train.II$FullBath
+train.II$QualLivingArea = train.II$OverallQual * train.II$GrLivArea
+train.II$QualExterior = train.II$OverallQual * train.II$ExterCond
+
+```
+
+Lets have a look at the data again
+
+```{r}
+#png(height=1200, width=1500, pointsize=15, file="trainII.png")
+corrplot(cor(train.II, use = "everything"), method = "shade", type="upper", sig.level = 0.01, insig = "blank")
+```
+
+
+```{r}
+train.II$TotalArea = train.II$TotalBsmtSF + train.II$X1stFlrSF + train.II$X2ndFlrSF
+train.II$QualTotalArea = train.II$OverallQual * train.II$TotalArea
+train.II = subset(train.II, select = -Id)
+train.II$LogSalePrice = log(train.II$SalePrice)
+```
+
+SPLITING DATASET FOR CROSS VALIDATION
+
+```{r}
+
+train.index <- sample(c(1:dim(train.II)[1]), dim(train.II)[1]*0.8)
+model_train = train.II[train.index,]
+model_train = subset(model_train, select = -SalePrice)
+model_test <- train.II[-train.index,]
+
+```
+
+LINEAR MODEL
+
+```{r}
+set.seed(123)
+lin_model = lm(LogSalePrice ~., data = model_train)
+summary(lin_model)
+
+```
+
+
+```{r}
+prediction <- predict(lin_model, model_test, type="response")
+
+residuals <- model_test$LogSalePrice - prediction
+pred <- data.frame("Predicted" = prediction, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
+pred
+accuracy(prediction, model_test$LogSalePrice)
+```
+
+
+RANDOM FOREST 
+
+```{r}
+rf_mod = randomForest(LogSalePrice~., data= model_train)
+
+prediction <- predict(rf_mod, model_test)
+
+residuals <- model_test$LogSalePrice - prediction
+pred <- data.frame("Predicted" = prediction, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
+pred
+accuracy(prediction, model_test$LogSalePrice)
+```
+
+```{r}
+testing.set$QualTime = testing.set$OverallQual * testing.set$YearBuilt
+testing.set$QualRemodTime = testing.set$OverallQual * testing.set$YearRemodAdd
+testing.set$QualBasement = testing.set$OverallQual * testing.set$TotalBsmtSF
+testing.set$QualBathrooms = testing.set$OverallQual * testing.set$FullBath
+testing.set$QualLivingArea = testing.set$OverallQual * testing.set$GrLivArea
+testing.set$QualExterior = testing.set$OverallQual * testing.set$ExterCond
+testing.set$TotalArea = testing.set$TotalBsmtSF + testing.set$X1stFlrSF + testing.set$X2ndFlrSF
+testing.set$QualTotalArea = testing.set$OverallQual * testing.set$TotalArea
+
+
+
+SalePriceRF <- predict(rf_mod, newdata = testing.set)
+SalePrice <- exp(SalePriceRF)
+
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_RF.csv", quote = FALSE, row.names = FALSE)
+```
+
+
+
