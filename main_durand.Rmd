@@ -17,11 +17,13 @@ Overview on the data
 ```{r}
 head(training.set.full)
 ```
-
+  
+  
 ##Handle non numerical columns
 
 Here we implement a function to convert all cathegorical data to numerical
-```{r}
+
+```{r, message=F, warning=F}
 #this function convert all the data to numeric
 handle_Non_Numerical_columns <- function(data){
   
@@ -64,7 +66,7 @@ testing.set.full = handle_Non_Numerical_columns(testing.set.full)
 head(training.set.full)
 ```
 
-We wanna check for each column if the number of NA's is greather than the number of available values. In which case we will check the meaning of NA for the relative column and eventually drop it since it would not be a good influencer on the final prediction
+We wanna check for each column if the number of NA's is greather than the number of available values. In which case we will drop it from the column list
 
 ```{r}
 #number of rows in the data set
@@ -74,7 +76,7 @@ print("")
 #counting the number of NA values for each independent variable
 na_count <-sapply(training.set.full, function(y) sum(length(which(is.na(y)))))
 
-#maintaining only variable with at least 1 NA value
+#retaining only variable with at least 1 NA value
 to_remove = c()
 for (i in 1:length(na_count)){
   if(na_count[[i]] == 0){
@@ -85,29 +87,15 @@ na_count = na_count[-to_remove]
 na_count
 ```
 
-the first column(Id) of the data frame represent an identifier for each observation wich is useless since it has almost no relationship with the SalePrice.
+the first column(Id) of the data frame represent an identifier for each observation wich is useless since it has almost no relationship with the SalePrice. We are also going to drop "Alley", "PoolQC", "Fence" and "MiscFeature" since they contain more NA's than actual available values. 
 
-We need to analuse these 19 variables to see whether the actual meaning of NA is not available(in the sense of infortion not given) or not.  
-LotFrontage: NA => not available  
-Alley: NA => No alley access  
-MasVnrType: NA => Not availabe  
-MasVnrArea: NA => Not available  
-BsmtQual: NA => No Basement  
-BsmtCond: NA => No Basement  
-BsmtExposure: NA => No Basement  
-BsmtFinType1: NA => No Basement  
-BsmtFinType2: NA => No Basement  
-Electrical: NA => not available  
-FireplaceQu: NA => No Fireplace  
-GarageType: NA => No Garage  
-GarageYrBlt: NA => No Garage  
-GarageFinish: NA => No Garage  
-GarageQual: NA => No Garage  
-GarageCond
+```{r}
+column_to_drop = c("Id", "Alley", "PoolQC", "Fence", "MiscFeature")
+```
 
 
-The columns we are for sure going to drop here are: PoolQC(1453 missing values), MiscFeature (1406) ad Fence(1179) since they contain to many NA's values.
-LotFrontage and FireplaceQu have respectively 259/1460 and 690/1460 missing values. Not more than a half but enough to capture our attention. To be sure that we should keep this variables, we are going to look at the relationship between them and the SalePrice.
+
+LotFrontage and FireplaceQu have respectively 259/1460 and 690/1460 missing values. Not more than a half but enough to capture our attention. To be sure that we should keep this variables, we are going to look at the relationship between them and the SalePrices
 
 ```{r}
 par(mfrow=c(2,1))
@@ -116,33 +104,23 @@ plot(training.set.full$SalePrice, training.set.full$LotFrontage, main="Relations
 
 cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, LotFrontage = training.set.full$LotFrontage)))
 
-plot(training.set.full$SalePrice, training.set.full$FireplaceQu, main="Relationship between SalePrice & FireplaceQu", xlab="SalePrice", ylab="FireplaceQu", pch=19)
+plot(training.set.full$SalePrice, training.set.full$FireplaceQ, main="Relationship between SalePrice & FireplaceQ", xlab="SalePrice", ylab="FireplaceQ", pch=19)
 
-cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, FireplaceQu = training.set.full$FireplaceQu)))
-
+cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, FireplaceQ = training.set.full$FireplaceQ)))
 ```
 
-The plot shows to us a relatively weak positive correlation between SalePrice and LotFrontage (0.35) and an extremely weak correlation between SalePrice and FireplaceQu(0.04).
-
-wich make sense cause the Linear feet of street connected to a property should influence only a bit on the house price.  The numerical value of this correlation is about 0.35. wich motivates us to drop this column from our data.
-
-
+The plot shows to us a relatively weak positive correlation between SalePrice and LotFrontage (0.35).
+wich make sense cause the Linear feet of street connected to a property should influence only a bit on the house price. The numerical value of this correlation is about 0.35 (bad but not that bad). wich motivates us to retain it. In the other habd, the plot shows us an extremely weak relationship between FireplaceQ ans SalePrice with a numerical value of 0.04. for this reason, we are going to remove FireplaceQ from our columns list
 
 ```{r}
-for (var in 1:NCOL(training.set.full)){
-  var_name = names(training.set.full)[var]
-  
-  print(paste0(var_name, ""))
-  print(cor(cbind(SalePrice = training.set.full$SalePrice, Other_variable = training.set.full[,paste0(var_name, "")])))
-  
-}
+column_to_drop = c(column_to_drop,"FireplaceQ")
 ```
 
 
-##Dealing with the NAs
+##Dealing with NAs
 
 At this point, all our fields are numerical but we still have a lot of NAs values. to solve this issue, we will:
-first test for NA and NaN using is.na and is.nan. After what we will use a common way to deal with these invalid numbers wich is to replace them with the mean or median of the other available data.
+first test for NA and NaN using is.na and is.nan. After what we will use a common way to deal with these invalid numbers wich is to replace them with the mean of the other available data.
 
 
 ```{r}
@@ -161,38 +139,150 @@ return(data)
 training.set.full = Replacing.NAs(training.set.full)
 testing.set.full = Replacing.NAs(testing.set.full)
 
-training.set.full = Replacing.NAs(training.set.full)
-testing.set.full = Replacing.NAs(testing.set.full)
 head(training.set.full)
 ```
 
-Here we choose a set of variables that we think are best estimators for the price. and we compute the log(saleprice) cause it's normally distributed and then it's better for linear regression
+
+Let's compute the correlations between features and the target variable SalePrice
+```{r}
+correlations = data.frame(1:NCOL(training.set.full), row.names = names(training.set.full))
+for (var in 1:NCOL(training.set.full)){
+  var_name = names(training.set.full)[var]
+  
+  correlation = cor(cbind(SalePrice = training.set.full$SalePrice, Other_variable = training.set.full[,paste0(var_name, "")]))
+  
+  correlations[var, 1] = correlation[1,2]
+  
+}
+
+colnames(correlations) = "SalePrice"
+correlations = correlations[order(-correlations$SalePrice), , drop = FALSE]
+head(correlations)
+
+```
+as we see above, The most correlated variables with the SalePrice are: OverallQual, GrLivArea, GarageCars, GarageArea, TotalBsmtSF, X1stFlrSF, FullBath, TotRmsAbvGrd, YearBuilt...  
+  
+Let's create a list of top heighly correlated with SalePrice and take a look on the variable that for now are going to be removed
 
 ```{r}
-#training.set.full <- subset(training.set.full, select = -Id )
-#testing.set.full <- subset(testing.set.full, select = -Id )
-
-#select variables that be used for model
-model_var <- c('SalePrice', 
-                'OverallQual','OverallCond','YearBuilt','ExterCond',
-                'TotalBsmtSF','HeatingQC', 
-                'CentralAir','GrLivArea','BedroomAbvGr','KitchenAbvGr',
-                'TotRmsAbvGrd','Fireplaces',
-                'GarageArea','OpenPorchSF','PoolArea',
-                 'YrSold')
-
-
-training.set.full <- training.set.full[, model_var]
-
-training.set.full$LogSalePrice = log(training.set.full$SalePrice)
-
-head(training.set.full)
+TopCorrelated = c("OverallQual", "GrLivArea", "GarageCars", "GarageArea", "TotalBsmtSF", "X1stFlrSF", "FullBath", "TotRmsAbvGrd", "YearBuilt", "YearRemodAdd", "MasVnrArea", "Fireplaces", "GarageYrBlt")
+print(column_to_drop)
 ```
 
+Now let's drop them the column that for now should be removed
+
+```{r}
+ix <- which(!(colnames(training.set.full) %in% column_to_drop))
+model_var = colnames(training.set.full)[ix]
+
+training.set.full <- training.set.full[, model_var]
+```
+
+Before doing linear regression to predict SalePrice, we need to check the distribution of the Response Variable(SalePrice)
+
+```{r}
+hist(training.set.full$SalePrice, main = "SalePrices Histogram", xlab = "SalePrice")
+```
+
+We are going to apply the log transformation to try to make it at least approximatively normally distributed
+
+```{r}
+training.set.full$LogSalePrice = log(training.set.full$SalePrice)
+hist(training.set.full$LogSalePrice, main = "LogSalePrices Histogram", xlab = "LogSalePrice")
+```
+
+##LINEAR REGRESSION
 
 Let's do the linear regression
 
 ```{r}
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_lin_train = training.set.full[train.index,]
+model_lin_valid <- training.set.full[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+summary(linreg)
+
+```
+
+
+
+```{r}
+prediction <- predict(linreg, model_lin_valid, type="response")
+
+residuals <- model_lin_valid$LogSalePrice - prediction
+pred <- data.frame("Predicted" = prediction, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2)))
+```
+
+The RMSE here is about 0.13 for the training set and 0.15 for the test set, which is actually not that bad. But how to improve this result?  
+Now let's use the model to predict the House prices of the testing set
+
+```{r}
+SalePrice2 <- predict(linreg, newdata = testing.set.full)
+SalePrice <- exp(SalePrice2)
+```
+
+product a first version of the submission file
+
+```{r}
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_LM.csv", quote = FALSE, row.names = FALSE)
+```
+
+
+
+If we go back and take a look to the "stars" column of the last linear model summary, we can create a list of non significant variables for this model as follow:
+```{r}
+non_significant = c(
+"MSSubClass", "MSZoning", "LotFrontage", "LotShape", "Utilities", "LotConfig", "LandSlope", "Condition2", "HouseStyle", "Exterior1st", "Exterior2nd", "MasVnrArea", "ExterQual", "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinSF1", "BsmtFinType2", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "Heating", "Electrical", "GrLivArea", "BsmtHalfBath", "HalfBath", "BedroomAbvGr", "TotRmsAbvGrd", "GarageType", "GarageYrBlt", "GarageFinish", "GarageArea", "GarageQual", "GarageCond", "PavedDrive", "EnclosedPorch", "X3SsnPorch", "MiscVal", "MoSold", "YrSold"
+)
+```
+
+We wanna check if we have some multicolinearity beyond these insignificant variables. We are then going to compute correlations between them
+
+```{r}
+subset1 = subset(training.set.full, select = non_significant)
+head(subset1)
+
+cor = cor(subset1)
+
+#this loop is to keep only couple of variables with a heigh correlation (greater than 0.7 and less -0.7) 
+for (c in colnames(cor)){
+  for(r in rownames(cor)){
+    if((cor[r, c] >= 0.7 || cor[r, c] <= -0.7) && (r != c)){
+      print(c(var1 = r, var2 = c, cor = cor[r, c]))
+    }
+  }
+}
+```
+
+Here we have three couples of heighly correlated indipendent variables:  
+
+###"Exterior1st" vs "Exterior2nd"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(Exterior1st = ("Exterior1st" %in% TopCorrelated), Exterior2nd = ("Exterior2nd" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(Exterior1st = correlations["Exterior1st",], Exterior2nd = correlations["Exterior2nd",])
+
+```
+
+"Exterior1st" and "Exterior2nd" are heighly correlated with a correlation of about 0.74; they both represent exterior covering on house. Therefore, we are going to keep "Exterior2nd" since it has a stronger correlation with SalePrice.
+```{r}
+#remove the Exterior1st
+training.set.full$Exterior1st = NULL
 
 #partition data for cross validation
 set.seed(123)
@@ -204,43 +294,301 @@ model_lin_valid <- training.set.full[-train.index,]
 model_lin_train <- subset(model_lin_train, select = -SalePrice)
 
 linreg <- lm(LogSalePrice~., data = model_lin_train)
-sm <- summary(linreg)
-sm
-
+summary(linreg)
 ```
 
-Let's do the cross validation by using the model to do prediction on the other 20% of the data in order to evaluate our model
+We notice that removing Exterior1st, the Adjusted R-squared increased a bit; which is a sign that we probably did the right thing. However, Exterior2nd is still insignificant in this new model so we are going to remove it too
 
 ```{r}
-library(forecast)
-
-SalePrice1 <- predict(linreg, newdata = model_lin_valid)
-#SalePrice1 <- data.frame(SalePrice1)
-#head(SalePrice1)
-
-residuals <- model_lin_valid$LogSalePrice - SalePrice1
-linreg_pred <- data.frame("Predicted" = SalePrice1, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
-linreg_pred
-accuracy(SalePrice1, model_lin_valid$LogSalePrice)
+#remove the Exterior2nd
+training.set.full$Exterior2nd = NULL
 ```
 
-The RMSE is about 0.1642516 wich is actually not that bad. But how to improve this result?
-Now let's use the model to predict the House prices of the testing set
+The Adjusted R-squared increased a bit so again, we've probably done the right thing. 
+
+###"BsmtFinSF2" vs "BsmtFinType2"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(BsmtFinSF2 = ("BsmtFinSF2" %in% TopCorrelated), BsmtFinType2 = ("BsmtFinType2" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(BsmtFinSF2 = correlations["BsmtFinSF2",], BsmtFinType2 = correlations["BsmtFinType2",])
+```
+
+
+The second couple of heigh correlated indipendent variables is "BsmtFinSF2" and "BsmtFinType2" with again a correlation of about 0.74; here we are going to remove both of them for the same reason as before. we are also removing "BsmtFinSF1" and "BsmtFinType1" they are pretty similar.
+
+```{r}
+#remove the BsmtFinSF2
+training.set.full$BsmtFinType2 = NULL
+training.set.full$BsmtFinSF2 = NULL
+training.set.full$BsmtFinType1 = NULL
+training.set.full$BsmtFinSF1 = NULL
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_lin_train = training.set.full[train.index,]
+model_lin_valid <- training.set.full[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+summary(linreg)
+```
+
+We've got Adjusted R-squared incresed and SaleCondition moved from almost significant to insignificant and MSZoning moved from insignificant to almost significant
+
+
+###"TotRmsAbvGrd" vs "GrLivArea"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(TotRmsAbvGrd = ("TotRmsAbvGrd" %in% TopCorrelated), GrLivArea = ("GrLivArea" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(TotRmsAbvGrd = correlations["TotRmsAbvGrd",], GrLivArea = correlations["GrLivArea",])
+```
+
+
+The last couple of heigh correlated indipendent variables is "TotRmsAbvGrd" and "GrLivArea" with a correlation of about 0.82; both of them are in the top correlated with SalePrice. in this case we are removing TotRmsAbvGrd since it has a lower correlation with SalePrice
+
+```{r}
+training.set.full$TotRmsAbvGrd = NULL
+```
+
+```{r}
+#update non_significant
+non_significant = c(
+"MSSubClass", "LotFrontage", "LotShape", "Utilities", "LotConfig", "LandSlope", "Condition2", "HouseStyle", "MasVnrArea", "ExterQual", "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtUnfSF", "TotalBsmtSF", "Heating", "Electrical", "BsmtHalfBath", "HalfBath", "BedroomAbvGr", "GarageType", "GarageYrBlt", "GarageFinish", "GarageArea", "GarageQual", "GarageCond", "PavedDrive", "EnclosedPorch", "X3SsnPorch", "MiscVal", "MoSold", "YrSold", "SaleCondition"
+)
+```
+
+Now, we are going to compute the correlation of all the remaining indipendent valiables since even if they are significant they could be highly correlated between them
+
+```{r}
+subset1 = subset(training.set.full, select = -SalePrice)
+subset1 = subset(subset1, select = -LogSalePrice)
+head(subset1)
+
+cor = cor(subset1)
+
+#this codo is to retain only couple of variables with a heigh correlation (greater than 0.7 and less -0.7) 
+for (c in colnames(cor)){
+  for(r in rownames(cor)){
+    if((cor[r, c] >= 0.7 || cor[r, c] <= -0.7) && (r != c)){
+      print(c(var1 = r, var2 = c, cor = cor[r, c]))
+    }
+  }
+}
+```
+
+###"BldgType" vs "MSSubClass"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(BldgType = ("BldgType" %in% TopCorrelated), MSSubClass = ("MSSubClass" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(BldgType = correlations["BldgType",], MSSubClass = correlations["MSSubClass",])
+```
+
+
+In the first couple "BldgType" and "MSSubClass", we already know that MSSubClass is insignificant that why we are going to remove it and see the impact on BldgType
+
+```{r}
+#remove the BsmtFinSF2
+training.set.full$MSSubClass = NULL
+
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_lin_train = training.set.full[train.index,]
+model_lin_valid <- training.set.full[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+summary(linreg)
+```
+
+BldgType changed from one star to two stars and the Adjusted R-squared increased. these are all good signs.  
+
+###"GarageYrBlt" vs "YearBuilt"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(GarageYrBlt = ("GarageYrBlt" %in% TopCorrelated), YearBuilt = ("YearBuilt" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(GarageYrBlt = correlations["GarageYrBlt",], YearBuilt = correlations["YearBuilt",])
+```
+
+In the second couple "GarageYrBlt" and "YearBuilt" we are going to remove GarageYrBlt since is less correlated than to SalePrice than YearBuilt
+
+```{r}
+training.set.full$MSSubClass = NULL
+```
+
+##"X1stFlrSF" vs "TotalBsmtSF"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(X1stFlrSF = ("X1stFlrSF" %in% TopCorrelated), TotalBsmtSF = ("TotalBsmtSF" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(X1stFlrSF = correlations["X1stFlrSF",], TotalBsmtSF = correlations["TotalBsmtSF",])
+```
+
+
+Third couple: "X1stFlrSF" and "TotalBsmtSF", we again drop X1stFlrSF since it's correlation with SalePrice is lower
+
+```{r}
+training.set.full$X1stFlrSF = NULL
+```
+
+###"GarageArea" vs "GarageCars"
+
+```{r}
+print("are they in the top correlated with SalePrice?") 
+cbind(GarageArea = ("GarageArea" %in% TopCorrelated), GarageCars = ("GarageCars" %in% TopCorrelated))
+print("their correlations with SalePrice")
+cbind(GarageArea = correlations["GarageArea",], GarageCars = correlations["GarageCars",])
+```
+
+The last couple is "GarageArea" and "GarageCars". again we are removing GarageArea since correlation with SalePrice is lower
+
+```{r}
+#remove the BsmtFinSF2
+training.set.full$GarageArea = NULL
+```
+
+Now that all the couples of heighly correlated explanatory variables are handled, let's see what does the final list of insignificant variables looks like 
+
+```{r}
+#update non_significant
+non_significant = c(
+"LotFrontage", "LotShape", "Utilities", "LotConfig", "LandSlope", "Condition2", "HouseStyle", "MasVnrArea", "ExterQual", "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtUnfSF", "Heating", "Electrical", "BsmtHalfBath", "HalfBath", "BedroomAbvGr", "TotRmsAbvGrd", "GarageType", "GarageYrBlt", "GarageFinish", "GarageQual", "GarageCond", "PavedDrive", "EnclosedPorch", "X3SsnPorch", "MiscVal", "MoSold", "YrSold"
+)
+```
+
+```{r}
+#remove the BsmtFinSF2
+"for (c in non_significant){
+  
+  print(c)
+  
+  training.set.full[,c] = NULL
+  
+  
+  #partition data for cross validation
+  set.seed(123)
+  #taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+  train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+  model_lin_train = training.set.full[train.index,]
+  model_lin_valid <- training.set.full[-train.index,]
+  
+  model_lin_train <- subset(model_lin_train, select = -SalePrice)
+  
+  linreg <- lm(LogSalePrice~., data = model_lin_train)
+  print(summary(linreg))
+}"
+```
+
+Exploring the output of the commented above loop we decided to keep somme of the insignificant variables due to the fact that thier removal was afecting negatively the model (decreasing Adjusted R-squared ...). This is the final list of variables to remove
+
+```{r}
+non_significant = c(
+"LotShape", "Utilities", "Condition2", "HouseStyle", "BsmtCond", "BsmtExposure", "Electrical", "GarageFinish", "GarageQual", "MiscVal", "MoSold"
+)
+
+```
+
+Now let's remove them and build a new linear with the new data 
+
+```{r}
+for (c in non_significant){
+  training.set.full[,c] = NULL
+}
+
+```
+
+###Outliers removal
+
+Features heigh correlated with the target variable could sometimes present huge outliers in which case in order to improve the model, those outliers should be removed. let's check if our data present some outliers starting from the heigher correlated with SalePrice
+
+```{r}
+par(mfrow=c(2,2))
+plot(training.set.full$OverallQual, training.set.full$SalePrice)
+plot(training.set.full$GrLivArea, training.set.full$SalePrice)
+plot(training.set.full$GarageCars, training.set.full$SalePrice)
+plot(training.set.full$TotalBsmtSF, training.set.full$SalePrice)
+
+plot(training.set.full$FullBath, training.set.full$SalePrice)
+plot(training.set.full$YearBuilt, training.set.full$SalePrice)
+plot(training.set.full$YearRemodAdd, training.set.full$SalePrice)
+plot(training.set.full$MasVnrArea, training.set.full$SalePrice)
+
+plot(training.set.full$Fireplaces, training.set.full$SalePrice)
+plot(training.set.full$GarageYrBlt, training.set.full$SalePrice)
+```
+
+The only criticals outliers we can see here are on the relationship between SalePrice and GrLivArea. Let's remove them
+
+```{r}
+training.set.full = training.set.full[!(training.set.full$GrLivArea > 4000 & training.set.full$SalePrice < 300000),]
+```
+
+
+Now let's build a new linear model with the new data 
+
+```{r}
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_lin_train = training.set.full[train.index,]
+model_lin_valid <- training.set.full[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+print(summary(linreg))
+  
+```
+
+let's see the behavior of this new model on testing data
+
+```{r}
+prediction_lm <- predict(linreg, model_lin_valid, type="response")
+
+residuals <- model_lin_valid$LogSalePrice - prediction_lm
+pred <- data.frame("Predicted" = prediction_lm, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2)))
+```
+The RMSE on the test set here is 0.1165286, which is good improvement of the previous one.
+
+###SUBMISSION FILE
 
 ```{r}
 SalePrice2 <- predict(linreg, newdata = testing.set.full)
 SalePrice <- exp(SalePrice2)
 ```
 
-product the submission file
+product a second version of the submission file
 
 ```{r}
-y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set)), SalePrice))
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
 head(y)
 
 # Save prediction to My_Submission.csv
-write.csv(y,file="My_Submission.csv", quote = FALSE, row.names = FALSE)
+write.csv(y,file="My_Submission_LM2.csv", quote = FALSE, row.names = FALSE)
 ```
+
+
+##RANDOM FOREST
+
 
 Now let's try with Random forest and see if the RMSE decreases
 ```{r}
@@ -262,77 +610,82 @@ plot(randomForestTest)
 Let's do the cross validation by using the model to do prediction on the other 20% of the data in order to evaluate the model
 
 ```{r}
-prediction.RandomForest <- predict(randomForestTest, model_rf_valid, type="response")
+prediction <- predict(randomForestTest, model_rf_valid, type="response")
 
-residuals <- model_rf_valid$LogSalePrice - prediction.RandomForest
-rf_pred <- data.frame("Predicted" = prediction.RandomForest, "Actual" = model_rf_valid$LogSalePrice, "Residual" = residuals)
-rf_pred
-accuracy(prediction.RandomForest, model_lin_valid$LogSalePrice)
+residuals <- model_rf_valid$LogSalePrice - prediction
+rf_pred <- data.frame("Predicted" = prediction, "Actual" = model_rf_valid$LogSalePrice, "Residual" = residuals)
+head(rf_pred)
+
+c(rmse_test = sqrt(mean(residuals^2)))
 ```
 
-The RMSE is 0.1515908 wich is not a great improvement of the previous. In fact, we need to work a bit more
+The RMSE is 0.1212047  wich is not an improvement of the previous. In fact, we need to work a bit more.  
+  
+let's product a third submission file
+```{r}
+SalePriceRF <- predict(randomForestTest, newdata = testing.set.full)
+SalePrice <- exp(SalePriceRF)
+
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_RF1.csv", quote = FALSE, row.names = FALSE)
+```
+
 
 ```{r}
 varImpPlot(randomForestTest)
 ```
 
 
-Now we wanna choose wisely the variable to include into the model
 ```{r}
 library(corrplot)
 library(Metrics)
 library(randomForest)
 ```
 
-for that we import again all the data and we handle again non numerical and missing values
+Can we create some features?
 
 ```{r}
-training.set <- read.csv("train.csv", stringsAsFactors=FALSE)
-testing.set <- read.csv("test.csv", stringsAsFactors=FALSE)
+#training.set <- read.csv("train.csv", stringsAsFactors=FALSE)
+#testing.set <- read.csv("test.csv", stringsAsFactors=FALSE)
 
-training.set = handle_Non_Numerical_columns(training.set)
-training.set = Replacing.NAs(training.set)
-testing.set = handle_Non_Numerical_columns(testing.set)
-testing.set = Replacing.NAs(testing.set)
+#training.set = handle_Non_Numerical_columns(training.set)
+#training.set = Replacing.NAs(training.set)
+training.set = training.set.full
+#testing.set = handle_Non_Numerical_columns(testing.set)
+#testing.set = Replacing.NAs(testing.set)
+testing.set = testing.set.full
 
 cor.par= cor(training.set, use = "everything")
-#png(height=1200, width=1500, pointsize=15, file="correlations.png")
+png(height=1200, width=1500, pointsize=15, file="correlations.png")
 corrplot(cor.par, method = "shade", type="upper", sig.level = 0.01, insig = "blank")
 ```
 
-From the correlation plot we realize that the price has a positive correlation with the overall quality. From that, the overall quality is set between 1 to 10, we can use that to create new features. For example, it is safe to assume newer houses should be more expensive than older ones. So we will be using the overall quality to create new indicators.
+From the random forest plot of variable importance we notice that the must importance variable is OverallQual. Again, From the correlation plot we realize that the price has a strong positive correlation with the overall quality. The overall quality value is between 1 to 10. we can then use it to create new features. For example, it is safe to assume that newer houses should be more expensive than older ones. So we will be using the overall quality to create new indicators.
 
 ```{r}
 train.II = training.set
 
-train.II$QualTime = train.II$OverallQual * train.II$YearBuilt
-train.II$QualRemodTime = train.II$OverallQual * train.II$YearRemodAdd
-train.II$QualBasement = train.II$OverallQual * train.II$TotalBsmtSF
-train.II$QualBathrooms = train.II$OverallQual * train.II$FullBath
 train.II$QualLivingArea = train.II$OverallQual * train.II$GrLivArea
 train.II$QualExterior = train.II$OverallQual * train.II$ExterCond
 
 ```
 
-Lets have a look at the data again
+Let's have a look at the correlations plot again
 
 ```{r}
-#png(height=1200, width=1500, pointsize=15, file="trainII.png")
+png(height=1200, width=1500, pointsize=15, file="trainII.png")
 corrplot(cor(train.II, use = "everything"), method = "shade", type="upper", sig.level = 0.01, insig = "blank")
 ```
 
+THe plot confirm that the LogPrice it strongly positively correlated to all the new features created.  
+  
+here we split the new data for cross validation
 
 ```{r}
-train.II$TotalArea = train.II$TotalBsmtSF + train.II$X1stFlrSF + train.II$X2ndFlrSF
-train.II$QualTotalArea = train.II$OverallQual * train.II$TotalArea
-train.II = subset(train.II, select = -Id)
-train.II$LogSalePrice = log(train.II$SalePrice)
-```
-
-SPLITING DATASET FOR CROSS VALIDATION
-
-```{r}
-
+set.seed(123)
 train.index <- sample(c(1:dim(train.II)[1]), dim(train.II)[1]*0.8)
 model_train = train.II[train.index,]
 model_train = subset(model_train, select = -SalePrice)
@@ -340,51 +693,53 @@ model_test <- train.II[-train.index,]
 
 ```
 
-LINEAR MODEL
+####LINEAR MODEL
 
 ```{r}
-set.seed(123)
-lin_model = lm(LogSalePrice ~., data = model_train)
-summary(lin_model)
+linreg <- lm(LogSalePrice~., data = model_train)
 
+prediction_lm <- predict(linreg, model_test, type="response")
+
+residuals <- model_test$LogSalePrice - prediction_lm
+pred <- data.frame("Predicted" = prediction_lm, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2)))
 ```
 
+Submission file
 
 ```{r}
-prediction <- predict(lin_model, model_test, type="response")
-
-residuals <- model_test$LogSalePrice - prediction
-pred <- data.frame("Predicted" = prediction, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
-pred
-accuracy(prediction, model_test$LogSalePrice)
-```
-
-
-RANDOM FOREST 
-
-```{r}
-rf_mod = randomForest(LogSalePrice~., data= model_train)
-
-prediction <- predict(rf_mod, model_test)
-
-residuals <- model_test$LogSalePrice - prediction
-pred <- data.frame("Predicted" = prediction, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
-pred
-accuracy(prediction, model_test$LogSalePrice)
-```
-
-```{r}
-testing.set$QualTime = testing.set$OverallQual * testing.set$YearBuilt
-testing.set$QualRemodTime = testing.set$OverallQual * testing.set$YearRemodAdd
-testing.set$QualBasement = testing.set$OverallQual * testing.set$TotalBsmtSF
-testing.set$QualBathrooms = testing.set$OverallQual * testing.set$FullBath
 testing.set$QualLivingArea = testing.set$OverallQual * testing.set$GrLivArea
 testing.set$QualExterior = testing.set$OverallQual * testing.set$ExterCond
-testing.set$TotalArea = testing.set$TotalBsmtSF + testing.set$X1stFlrSF + testing.set$X2ndFlrSF
-testing.set$QualTotalArea = testing.set$OverallQual * testing.set$TotalArea
+
+SalePriceLM <- predict(linreg, newdata = testing.set)
+SalePrice <- exp(SalePriceLM)
+
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_LM3.csv", quote = FALSE, row.names = FALSE)
+```
 
 
+####RANDOM FOREST 
 
+```{r}
+library(forecast)
+rf_mod = randomForest(LogSalePrice~., data= model_train)
+
+prediction_rf <- predict(rf_mod, model_test)
+
+residuals <- model_test$LogSalePrice - prediction_rf
+pred <- data.frame("Predicted" = prediction_rf, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse = sqrt(mean(residuals^2)))
+```
+
+```{r}
 SalePriceRF <- predict(rf_mod, newdata = testing.set)
 SalePrice <- exp(SalePriceRF)
 
@@ -392,8 +747,58 @@ y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
 head(y)
 
 # Save prediction to My_Submission.csv
-write.csv(y,file="My_Submission_RF.csv", quote = FALSE, row.names = FALSE)
+write.csv(y,file="My_Submission_RF2.csv", quote = FALSE, row.names = FALSE)
 ```
 
+####LASSO REGRESSION
 
+```{r}
+require(glmnet)
+
+x <- as.matrix(subset(model_train, select = -LogSalePrice))
+y <- as.double(as.matrix(model_train[, "LogSalePrice"]))
+
+set.seed(999)
+cv <- cv.glmnet(x, y, family='gaussian', alpha = 1, nlambda = 100)
+
+fit = glmnet(x, y, family = "gaussian", alpha = 1, lambda = cv$lambda.1se)
+
+nx = model_test
+nx$SalePrice = NULL
+nx$LogSalePrice = NULL
+nx = as.matrix(nx)
+prediction_lasso <- predict.glmnet(fit, newx = nx)
+
+residuals <- model_test$LogSalePrice - prediction_lasso
+pred <- data.frame("Predicted" = prediction_lasso, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_test = sqrt(mean(residuals^2)))
+
+
+```
+
+The choose of weights for each model depend on the RMSE of the model. lm had better RMSE that's why its weight is heigher.
+
+```{r}
+p = ((prediction_lm + prediction_rf)/2)
+residuals <- model_test$LogSalePrice - p
+pred <- data.frame("Predicted" = p, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_test = sqrt(mean(residuals^2)))
+```
+Combianing the two models, we get a better RMSE.  
+Creating a final submission file combianing our two best models: linear model and random forest
+
+```{r}
+SalePriceFinal <- (0.56*SalePriceLM + 0.44*SalePriceRF)
+SalePrice <- exp(SalePriceFinal)
+
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_Final.csv", quote = FALSE, row.names = FALSE)
+```
 
