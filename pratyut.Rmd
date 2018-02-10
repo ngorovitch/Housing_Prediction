@@ -1,0 +1,188 @@
+---
+title: "Predictions"
+output: html_document
+---
+
+# Loading dependencies
+```{r}
+library(Metrics)
+library(caTools)
+library(xgboost)
+library (corrplot)
+library (tidyverse)
+library(randomForest)
+```
+
+# Loading data
+```{r}
+train <- read.csv("train.csv")
+test <- read.csv("test.csv")
+```
+
+# Data analysis
+Lets concatenate the train and test data such that we can conviniently analyze the data.
+```{r}
+# exclude `SalePrice` column from train data, combine train data with test data, remove `Id` column frome combined data
+combined_dataset = within(rbind(subset(train, select = -SalePrice), test), rm(Id))
+```
+
+We observe two data types in the dataset, either categorical or numerical. Separating numeric and factor type features to analyze them separately.
+```{r}
+# assimilate categorical feature vector columns
+cat_features = combined_dataset[,sapply(combined_dataset, is.factor)]
+
+# assimilate numerical feature vector columns
+num_features = combined_dataset[,sapply(combined_dataset, is.numeric)]
+```
+
+lets examine the proportion of NA values in both numeric and categorical columns
+```{r}
+# proportions of NAs in categorical data
+print(sort(sapply(cat_features, function(col) sum(is.na(col))/length(col)), decreasing = T))
+```
+
+Features like PoolQC, MiscFeature, Alley and Fence have high proportion of missing values and hence they will not be good estimators to predict the SalePrice using regression models.
+
+```{r}
+# proportions of NAs in numerical data
+print(sort(sapply(num_features, function(col) sum(is.na(col))/length(col)), decreasing = T))
+```
+
+# Preporcess data
+
+We can treat the NAs in categorical data by replacing them with new level named 'Null' for all columns .
+```{r}
+preprocessed_cat_features = data.frame(sapply(cat_features, function(col) { levels(col) <- c(levels(col), 'Null'); col[is.na(col)] <- 'Null'; col}))
+```
+
+In similar manner we can replace all NAs for numeric data by median value for the column.
+```{r}
+preprocessed_num_features = data.frame(sapply(num_features, function(col) { col[is.na(col)] <- median(col, na.rm = T); col}))
+```
+
+Lets combine the preprocessed categoric and numeric features.
+```{r}
+preprocessed_combined_dataset = cbind(preprocessed_cat_features, preprocessed_num_features)
+preprocessed_train_data = data.frame(preprocessed_combined_dataset[1:1460,])
+preprocessed_test_data = preprocessed_combined_dataset[1461:2919,]
+```
+
+```{r}
+# helper function definition to generate CSV files in desirable format
+save_predictions_to_file = function (predictions, file_name = 'submission.csv') {
+  submission <- data.frame(Id = 1461:(1461+length(predictions)-1), SalePrice = predictions)
+  write.csv(submission, paste('submissions/', file_name), row.names = F, quote = F)  
+}
+```
+
+We short-listed the features that have higher significance level for the dependent variable 'SalePrice'.
+```{r}
+selected_features = c('LandSlope', 'Neighborhood', 'Condition2', 'RoofMatl', 'Foundation', 'CentralAir', 'GarageQual', 'LotArea', 'OverallQual', 'OverallCond', 'YearBuilt', 'BsmtFinSF1', 'BsmtFinSF2', 'X1stFlrSF', 'X2ndFlrSF', 'BsmtFullBath', 'HalfBath')
+```
+
+
+# Splitting training data for corss-validation
+```{r}
+
+```
+
+
+
+
+# Prediction using Linear Regression model to predict SalePrice
+
+Prepare train data for linear model.
+```{r}
+lm_train_data <- subset(preprocessed_train_data, select = selected_features)
+
+# use logarithm of SalpePrice such that dependent variable would be normally distributed, a desirable creteria for linear regression
+lm_train_data$lSalePrice <- log(train$SalePrice)
+
+lm_test_data <- subset(preprocessed_test_data, select = selected_features)
+```
+
+Train linear model.
+```{r}
+linear_model <- lm(lSalePrice ~ ., data = lm_train_data)
+summary(l_model)
+```
+
+Predict the SalePrice for given test data using the linear model.
+```{r}
+lm_predicted_sale_price = exp(predict(linear_model, newdata = lm_test_data))
+```
+
+Write prediction to CSV file.
+```{r}
+save_predictions_to_file(lm_predicted_sale_price, 'submission_lm_lg.csv')
+```
+
+
+
+
+
+# Prediction using Random Forest model to predict SalePrice
+
+Prepare training data.
+```{r}
+rf_train_data = subset(preprocessed_train_data, select = selected_features)
+rf_train_data$lSalePrice <- log(train$SalePrice)
+
+rf_test_data = subset(preprocessed_test_data, select = selected_features)
+```
+
+Generate RandomForest model.
+```{r}
+rf_model = randomForest(lSalePrice ~ ., data = rf_train_data, ntree = 500)
+plot(rf_model)
+```
+
+```{r}
+varImpPlot(rf_model)
+```
+
+Generate predictions using RandomeForest model.
+```{r}
+rf_predicted_sale_price = exp(predict(rf_model, rf_test_data, type = 'response'))
+```
+
+Write prediction to CSV file.
+```{r}
+save_predictions_to_file(rf_predicted_sale_price, 'submission_rf_lg.csv')
+```
+
+
+
+# Prediction using XGBoost for prediction of SalePrice
+
+Prepare training and testing data.
+```{r}
+xgbst_train_data = subset(preprocessed_train_data, select = selected_features)
+xgbst_test_data = subset(preprocessed_test_data, select = selected_features)
+```
+
+Build `xgboost` model.
+```{r}
+xgbst_model = xgboost(data = data.matrix(xgbst_train_data), label = log(train$SalePrice), max.depth = 2, eta = 0.3, nrounds = 30, nthread = 5, objective = 'reg:linear')
+```
+
+Generate predictions using the model
+```{r}
+xgbst_predicted_sale_price = exp(predict(xgbst_model, data.matrix(xgbst_test_data)))
+```
+
+Write prediction to CSV file.
+```{r}
+save_predictions_to_file(xgbst_predicted_sale_price, 'submission_xgbst_lg.csv')
+```
+
+
+
+
+# Average outcomes from linear regression, random forest and xgboost
+
+```{r}
+average_predicted_sale_price = (lm_predicted_sale_price + rf_predicted_sale_price + xgbst_predicted_sale_price)/3
+save_predictions_to_file(average_predicted_sale_price, 'submission_lm_rf_xgbst_lg.csv')
+```
+
