@@ -1,0 +1,492 @@
+```{r}
+library(Metrics)
+library(caTools)
+library(xgboost)
+library (corrplot)
+library (tidyverse)
+library(randomForest)
+```
+
+
+##Quick look at the dataset
+First we read in our data:
+
+```{r}
+#stringsAsFactors is used here to be able later to convert non numerical to numerical
+training.set.full <- read.csv("train.csv", stringsAsFactors=FALSE)
+testing.set.full <- read.csv("test.csv", stringsAsFactors=FALSE)
+```
+
+Overview on the data
+```{r}
+head(training.set.full)
+```
+  
+  
+##Handle non numerical columns
+
+Here we implement a function to convert all cathegorical data to numerical
+
+```{r, message=F, warning=F}
+#this function convert all the data to numeric
+handle_Non_Numerical_columns <- function(data){
+  
+#for each field or column
+for (field in 1:NCOL(data)){
+      if (!is.numeric(data[1, field])){
+        
+        allValues = c()
+        #creating a set of all the values of the column
+        #for each value in the field
+        for (value in data[, field]){
+          if ((!value %in% allValues) && !is.na(value)){
+            allValues = c(allValues, value)
+          }
+        }
+        
+        
+        #browse the column and substitute the values by their numerical corresponding
+        #for each value in the field
+        pos = 1
+        for (value in data[, field]){
+          #the function match returns the position of value in the list allValues
+          data[pos, field] = match(value, allValues)
+          pos = pos + 1
+          
+        }
+        
+      }
+#convert the column in numeric
+data[,field] = as.numeric(data[,field])
+}
+  
+return(data)
+}
+
+training.set.full = handle_Non_Numerical_columns(training.set.full)
+testing.set.full = handle_Non_Numerical_columns(testing.set.full)
+
+
+head(training.set.full)
+```
+
+We wanna check for each column if the number of NA's is greather than the number of available values. In which case we will drop it from the column list
+
+```{r}
+#number of rows in the data set
+c(Number_of_rows_in_data_set = NROW(training.set.full))
+print("")
+
+#counting the number of NA values for each independent variable
+na_count <-sapply(training.set.full, function(y) sum(length(which(is.na(y)))))
+
+#retaining only variable with at least 1 NA value
+to_remove = c()
+for (i in 1:length(na_count)){
+  if(na_count[[i]] == 0){
+    to_remove = c(to_remove, i)
+  }
+}
+na_count = na_count[-to_remove]
+na_count
+```
+
+the first column(Id) of the data frame represent an identifier for each observation wich is useless since it has almost no relationship with the SalePrice. We are also going to drop "Alley", "PoolQC", "Fence" and "MiscFeature" since they contain more NA's than actual available values. 
+
+```{r}
+column_to_drop = c("Id", "Alley", "PoolQC", "Fence", "MiscFeature")
+```
+
+
+
+LotFrontage and FireplaceQu have respectively 259/1460 and 690/1460 missing values. Not more than a half but enough to capture our attention. To be sure that we should keep this variables, we are going to look at the relationship between them and the SalePrices
+
+```{r}
+par(mfrow=c(2,1))
+
+plot(training.set.full$SalePrice, training.set.full$LotFrontage, main="Relationship between SalePrice & LotFrontage", xlab="SalePrice", ylab="LotFrontage", pch=19)
+
+cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, LotFrontage = training.set.full$LotFrontage)))
+
+plot(training.set.full$SalePrice, training.set.full$FireplaceQ, main="Relationship between SalePrice & FireplaceQ", xlab="SalePrice", ylab="FireplaceQ", pch=19)
+
+cor(na.omit(cbind(SalePrice = training.set.full$SalePrice, FireplaceQ = training.set.full$FireplaceQ)))
+```
+
+The plot shows to us a relatively weak positive correlation between SalePrice and LotFrontage (0.35).
+wich make sense cause the Linear feet of street connected to a property should influence only a bit on the house price. The numerical value of this correlation is about 0.35 (bad but not that bad). wich motivates us to retain it. In the other habd, the plot shows us an extremely weak relationship between FireplaceQ ans SalePrice with a numerical value of 0.04. for this reason, we are going to remove FireplaceQ from our columns list
+
+```{r}
+column_to_drop = c(column_to_drop,"FireplaceQ")
+```
+
+
+##Dealing with NAs
+
+At this point, all our fields are numerical but we still have a lot of NAs values. to solve this issue, we will:
+first test for NA and NaN using is.na and is.nan. After what we will use a common way to deal with these invalid numbers wich is to replace them with the mean of the other available data.
+
+
+```{r}
+#this function replaces all NAs of the dataset by the mean or median of the coresponding field
+Replacing.NAs <- function(data){
+    for (field in 1:NCOL(data)){
+          #compute the mean
+              field.mean <- median(data[,field], na.rm=TRUE)
+          #substitute all the NAs by the mean
+               data[is.na(data[,field]), field] <- field.mean
+          
+    }
+return(data)
+}
+
+training.set.full = Replacing.NAs(training.set.full)
+testing.set.full = Replacing.NAs(testing.set.full)
+
+head(training.set.full)
+```
+
+
+Let's compute the correlations between features and the target variable SalePrice
+```{r}
+correlations = data.frame(1:NCOL(training.set.full), row.names = names(training.set.full))
+for (var in 1:NCOL(training.set.full)){
+  var_name = names(training.set.full)[var]
+  
+  correlation = cor(cbind(SalePrice = training.set.full$SalePrice, Other_variable = training.set.full[,paste0(var_name, "")]))
+  
+  correlations[var, 1] = correlation[1,2]
+  
+}
+
+colnames(correlations) = "SalePrice"
+correlations = correlations[order(-correlations$SalePrice), , drop = FALSE]
+head(correlations)
+
+```
+
+```{r}
+correlations
+```
+
+as we see above, The most correlated variables with the SalePrice are: OverallQual, GrLivArea, GarageCars, GarageArea, TotalBsmtSF, X1stFlrSF, FullBath, TotRmsAbvGrd, YearBuilt...  
+  
+Let's create a list of top heighly correlated with SalePrice and take a look on the variable that for now are going to be removed
+
+Before doing linear regression to predict SalePrice, we need to check the distribution of the Response Variable(SalePrice)
+
+```{r}
+hist(training.set.full$SalePrice, main = "SalePrices Histogram", xlab = "SalePrice")
+```
+
+We are going to apply the log transformation to try to make it at least approximatively normally distributed
+
+```{r}
+training.set.full$LogSalePrice = log(training.set.full$SalePrice)
+hist(training.set.full$LogSalePrice, main = "LogSalePrices Histogram", xlab = "LogSalePrice")
+```
+
+
+
+##LINEAR REGRESSION
+
+Let's do the linear regression
+
+```{r}
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.full)[1]), dim(training.set.full)[1]*0.8)
+model_lin_train = training.set.full[train.index,]
+model_lin_valid <- training.set.full[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+summary(linreg)
+
+```
+
+
+
+```{r}
+prediction <- predict(linreg, model_lin_valid, type="response")
+
+residuals <- model_lin_valid$LogSalePrice - prediction
+pred <- data.frame("Predicted" = prediction, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2)))
+```
+
+The RMSE here is about 0.13 for the training set and 0.15 for the test set, which is actually not that bad. But how to improve this result?  
+Now let's use the model to predict the House prices of the testing set
+
+```{r}
+SalePrice2 <- predict(linreg, newdata = testing.set.full)
+SalePrice <- exp(SalePrice2)
+```
+
+product a first version of the submission file
+```{r}
+library(Metrics)
+```
+
+
+product a first version of the submission file
+
+```{r}
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_LM.csv", quote = FALSE, row.names = FALSE)
+```
+
+New Feature creation..
+We can see from the correlation that overall quality is highly correclated with the saleprice,  and its 
+
+
+```{r}
+training.set.new = training.set.full
+training.set.new$QualTime = training.set.new$OverallQual * training.set.new$YearBuilt
+training.set.new$QualRemodTime = training.set.new$OverallQual * training.set.new$YearRemodAdd
+training.set.new$QualBasement = training.set.new$OverallQual * training.set.new$TotalBsmtSF
+training.set.new$QualBathrooms = training.set.new$OverallQual * training.set.new$FullBath
+training.set.new$QualLivingArea = training.set.new$OverallQual * training.set.new$GrLivArea
+training.set.new$QualExterior = training.set.new$OverallQual * training.set.new$ExterCond
+training.set.new$HouseAge =  training.set.new$YearBuilt -2018
+training.set.new$HouseRemodAge = training.set.new$YearRemodAdd -2018
+training.set.new$TotalArea = training.set.new$TotalBsmtSF + training.set.new$X1stFlrSF + training.set.new$X2ndFlrSF
+training.set.new$QualTotalArea = training.set.new$OverallQual * training.set.new$TotalArea
+
+```
+
+
+```{r}
+testing.set.new = testing.set.full
+testing.set.new$QualTime = testing.set.new$OverallQual * testing.set.new$YearBuilt
+testing.set.new$QualRemodTime = testing.set.new$OverallQual * testing.set.new$YearRemodAdd
+testing.set.new$QualBasement = testing.set.new$OverallQual * testing.set.new$TotalBsmtSF
+testing.set.new$QualBathrooms =testing.set.new$OverallQual * testing.set.new$FullBath
+testing.set.new$QualLivingArea = testing.set.new$OverallQual * testing.set.new$GrLivArea
+testing.set.new$QualExterior = testing.set.new$OverallQual * testing.set.new$ExterCond
+testing.set.new$HouseAge =  testing.set.new$YearBuilt -2018
+testing.set.new$HouseRemodAge = testing.set.new$YearRemodAdd -2018
+testing.set.new$TotalArea = testing.set.new$TotalBsmtSF + testing.set.new$X1stFlrSF + testing.set.new$X2ndFlrSF
+testing.set.new$QualTotalArea = testing.set.new$OverallQual * testing.set.new$TotalArea
+```
+
+Lets check the correlation matric now
+
+```{r}
+cor.par= cor(training.set.new, use = "everything")
+png(height=1200, width=1500, pointsize=15, file="training.set.new.png")
+corrplot(cor.par, method = "shade", type="upper", sig.level = 0.01, insig = "blank")
+```
+
+
+```{r}
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.new)[1]), dim(training.set.new)[1]*0.8)
+model_lin_train = training.set.new[train.index,]
+model_lin_valid <- training.set.new[-train.index,]
+
+model_lin_train <- subset(model_lin_train, select = -SalePrice)
+
+linreg <- lm(LogSalePrice~., data = model_lin_train)
+print(summary(linreg))
+```
+
+
+
+```{r}
+prediction_lm <- predict(linreg, model_lin_valid, type="response")
+
+residuals <- model_lin_valid$LogSalePrice - prediction_lm
+pred <- data.frame("Predicted" = prediction_lm, "Actual" = model_lin_valid$LogSalePrice, "Residual" = residuals)
+head(pred)
+
+c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2)))
+```
+
+
+```{r}
+library(randomForest)
+
+#partition data for cross validation
+set.seed(123)
+#taking randomly 0.8(80%) of the observation for training the data and 20% for cross validating
+train.index <- sample(c(1:dim(training.set.new)[1]), dim(training.set.new)[1]*0.8)
+model_rf_train = training.set.new[train.index,]
+model_rf_valid <- training.set.new[-train.index,]
+
+model_rf_train <- subset(model_rf_train, select = -SalePrice)
+
+randomForestTest <- randomForest(LogSalePrice ~ ., data = model_rf_train, ntree=500)
+plot(randomForestTest)
+```
+
+```{r}
+
+prediction <- predict(randomForestTest, model_rf_valid, type="response")
+
+residuals <- model_rf_valid$LogSalePrice - prediction
+rf_pred <- data.frame("Predicted" = prediction, "Actual" = model_rf_valid$LogSalePrice, "Residual" = residuals)
+head(rf_pred)
+
+c(rmse_test = sqrt(mean(residuals^2)))
+```
+
+```{r}
+selected_features = c('LandSlope', 'Neighborhood', 'Condition2', 'RoofMatl', 'Foundation', 'CentralAir', 'GarageQual', 'LotArea', 'OverallQual', 'OverallCond', 'YearBuilt', 'BsmtFinSF1', 'BsmtFinSF2', 'X1stFlrSF', 'X2ndFlrSF', 'BsmtFullBath', 'HalfBath', 'QualRemodTime', 'QualTime', 'TotalArea', 'QualTotalArea','QualBasement','QualBathrooms','QualLivingArea', 'QualExterior')
+```
+
+
+```{r}
+xgbst_train_data = subset(training.set.new, select = selected_features)
+xgbst_test_data = subset(testing.set.new, select = selected_features)
+xgbst_model = xgboost(data = data.matrix(xgbst_train_data), label = log(training.set.new$SalePrice), max.depth = 2, eta = 0.3, nrounds = 30, nthread = 5, objective = 'reg:linear')
+```
+
+```{r}
+xgbst_predicted_sale_price = exp(predict(xgbst_model, data.matrix(xgbst_test_data)))
+```
+
+```{r}
+
+```
+
+
+```{r}
+SalePrice=xgbst_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_xgbst.csv", quote = FALSE, row.names = FALSE)
+```
+
+```{r}
+
+```
+Prepare training data.
+```{r}
+rf_train_data = subset(training.set.new, select = selected_features)
+rf_train_data$lSalePrice <- log(train$SalePrice)
+rf_test_data = subset(testing.set.new, select = selected_features)
+
+```
+
+Generate RandomForest model.
+```{r}
+rf_model = randomForest(lSalePrice ~ ., data = rf_train_data, ntree = 500)
+rf_predicted_sale_price = exp(predict(rf_model, rf_test_data, type = 'response'))
+```
+
+
+
+```{r}
+SalePrice=rf_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_rf.csv", quote = FALSE, row.names = FALSE)
+```
+
+
+```{r}
+lm_train_data <- subset(training.set.new, select = selected_features)
+
+# use logarithm of SalpePrice such that dependent variable would be normally distributed, a desirable creteria for linear regression
+lm_train_data$lSalePrice <- log(training.set.new$SalePrice)
+
+lm_test_data <- subset(testing.set.new, select = selected_features)
+```
+
+```{r}
+linear_model <- lm(lSalePrice ~ ., data = lm_train_data)
+summary(linear_model)
+lm_predicted_sale_price = exp(predict(linear_model, newdata = lm_test_data))
+```
+
+```{r}
+SalePrice=lm_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_lm.csv", quote = FALSE, row.names = FALSE)
+```
+
+```{r}
+average_predicted_sale_price = (lm_predicted_sale_price + rf_predicted_sale_price + xgbst_predicted_sale_price)/3
+SalePrice=average_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_average.csv", quote = FALSE, row.names = FALSE)
+```
+```{r}
+library(e1071)
+```
+
+
+```{r}
+svm_train_data = subset(training.set.new, select = selected_features)
+svm_train_data$lSalePrice <- log(train$SalePrice)
+svm_test_data = subset(testing.set.new, select = selected_features)
+svm_model = svm(lSalePrice ~ ., data = svm_train_data)
+
+
+svm_predicted_sale_price = exp(predict(svm_model, svm_test_data, type = 'response'))
+```
+
+```{r}
+SalePrice=svm_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_svm.csv", quote = FALSE, row.names = FALSE)
+```
+
+```{r}
+library(nnet)
+```
+
+```{r}
+nnet_train_data = subset(training.set.new, select = selected_features)
+nnet_train_data$lSalePrice <- log(train$SalePrice)
+nnet_test_data = subset(testing.set.new, select = selected_features)
+nnet_model = nnet(lSalePrice ~ ., data = nnet_train_data,size=10)
+
+
+nnet_predicted_sale_price = exp(predict(svm_model, svm_test_data, type = 'response'))
+```
+
+```{r}
+SalePrice=nnet_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_nnet.csv", quote = FALSE, row.names = FALSE)
+```
+
+```{r}
+average_predicted_sale_price = (lm_predicted_sale_price + rf_predicted_sale_price + xgbst_predicted_sale_price+svm_predicted_sale_price+ nnet_predicted_sale_price)/5
+SalePrice=average_predicted_sale_price
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="Submision_average.csv", quote = FALSE, row.names = FALSE)
+```
+
+
+
