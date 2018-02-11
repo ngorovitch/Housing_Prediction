@@ -178,18 +178,33 @@ model_var = colnames(training.set.full)[ix]
 training.set.full <- training.set.full[, model_var]
 ```
 
-Before doing linear regression to predict SalePrice, we need to check the distribution of the Response Variable(SalePrice)
+Before doing linear regression to predict SalePrice, we need to check the distribution and the skewness of the Response Variable(SalePrice)
 
 ```{r}
+library(e1071) 
 hist(training.set.full$SalePrice, main = "SalePrices Histogram", xlab = "SalePrice")
+skewness(training.set.full$SalePrice)
 ```
 
-We are going to apply the log transformation to try to make it at least approximatively normally distributed
+We are going to apply the log transformation to try to make it at least approximatively normally distributed and reduce the skewness
 
 ```{r}
 training.set.full$LogSalePrice = log(training.set.full$SalePrice)
 hist(training.set.full$LogSalePrice, main = "LogSalePrices Histogram", xlab = "LogSalePrice")
 ```
+
+One more thing to do here which could improve our model is to select only observations with "normal" SaleCondition (1 after numerical transformation)
+```{r}
+#training.set.full = subset(training.set.full, SaleCondition == 1)
+#after this, alse the feature utilities only contains ones
+#NROW(subset(training.set.full, Utilities != 1))
+
+#so these variables are not usefull anymore and we can safely remove them
+#training.set.full$SaleCondition = NULL
+#training.set.full$Utilities = NULL
+```
+
+
 
 ##LINEAR REGRESSION
 
@@ -245,7 +260,7 @@ write.csv(y,file="My_Submission_LM.csv", quote = FALSE, row.names = FALSE)
 If we go back and take a look to the "stars" column of the last linear model summary, we can create a list of non significant variables for this model as follow:
 ```{r}
 non_significant = c(
-"MSSubClass", "MSZoning", "LotFrontage", "LotShape", "Utilities", "LotConfig", "LandSlope", "Condition2", "HouseStyle", "Exterior1st", "Exterior2nd", "MasVnrArea", "ExterQual", "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinSF1", "BsmtFinType2", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "Heating", "Electrical", "GrLivArea", "BsmtHalfBath", "HalfBath", "BedroomAbvGr", "TotRmsAbvGrd", "GarageType", "GarageYrBlt", "GarageFinish", "GarageArea", "GarageQual", "GarageCond", "PavedDrive", "EnclosedPorch", "X3SsnPorch", "MiscVal", "MoSold", "YrSold"
+"MSSubClass", "MSZoning", "LotFrontage", "LotShape", "LotConfig", "LandSlope", "Condition2", "HouseStyle", "Exterior1st", "Exterior2nd", "MasVnrArea", "ExterQual", "BsmtQual", "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinSF1", "BsmtFinType2", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "Heating", "Electrical", "GrLivArea", "BsmtHalfBath", "HalfBath", "BedroomAbvGr", "TotRmsAbvGrd", "GarageType", "GarageYrBlt", "GarageFinish", "GarageArea", "GarageQual", "GarageCond", "PavedDrive", "EnclosedPorch", "X3SsnPorch", "MiscVal", "MoSold", "YrSold"
 )
 ```
 
@@ -256,7 +271,6 @@ subset1 = subset(training.set.full, select = non_significant)
 head(subset1)
 
 cor = cor(subset1)
-
 #this loop is to keep only couple of variables with a heigh correlation (greater than 0.7 and less -0.7) 
 for (c in colnames(cor)){
   for(r in rownames(cor)){
@@ -569,6 +583,13 @@ c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2
 ```
 The RMSE on the test set here is 0.1165286, which is good improvement of the previous one.
 
+Now let's train the model with the whole training set
+```{r}
+model_train = subset(training.set.full, select = -SalePrice)
+linreg <- lm(LogSalePrice~., data = model_train)
+```
+
+
 ###SUBMISSION FILE
 
 ```{r}
@@ -648,14 +669,7 @@ library(randomForest)
 Can we create some features?
 
 ```{r}
-#training.set <- read.csv("train.csv", stringsAsFactors=FALSE)
-#testing.set <- read.csv("test.csv", stringsAsFactors=FALSE)
-
-#training.set = handle_Non_Numerical_columns(training.set)
-#training.set = Replacing.NAs(training.set)
 training.set = training.set.full
-#testing.set = handle_Non_Numerical_columns(testing.set)
-#testing.set = Replacing.NAs(testing.set)
 testing.set = testing.set.full
 
 cor.par= cor(training.set, use = "everything")
@@ -707,6 +721,13 @@ head(pred)
 c(rmse_train = sqrt(mean(linreg$residuals^2)), rmse_test = sqrt(mean(residuals^2)))
 ```
 
+Now let's train the model with the whole train set
+```{r}
+model_train = subset(train.II, select = -SalePrice)
+linreg <- lm(LogSalePrice~., data = model_train)
+```
+
+
 Submission file
 
 ```{r}
@@ -728,6 +749,13 @@ write.csv(y,file="My_Submission_LM3.csv", quote = FALSE, row.names = FALSE)
 
 ```{r}
 library(forecast)
+
+set.seed(123)
+train.index <- sample(c(1:dim(train.II)[1]), dim(train.II)[1]*0.8)
+model_train = train.II[train.index,]
+model_train = subset(model_train, select = -SalePrice)
+model_test <- train.II[-train.index,]
+
 rf_mod = randomForest(LogSalePrice~., data= model_train)
 
 prediction_rf <- predict(rf_mod, model_test)
@@ -737,6 +765,12 @@ pred <- data.frame("Predicted" = prediction_rf, "Actual" = model_test$LogSalePri
 head(pred)
 
 c(rmse = sqrt(mean(residuals^2)))
+
+
+#Now let's train the model with the whole training set
+model_train = subset(train.II, select = -SalePrice)
+rf_mod = randomForest(LogSalePrice~., data= model_train)
+
 ```
 
 ```{r}
@@ -755,6 +789,14 @@ write.csv(y,file="My_Submission_RF2.csv", quote = FALSE, row.names = FALSE)
 ```{r}
 require(glmnet)
 
+set.seed(123)
+train.index <- sample(c(1:dim(train.II)[1]), dim(train.II)[1]*0.8)
+model_train = train.II[train.index,]
+model_train = subset(model_train, select = -SalePrice)
+model_test <- train.II[-train.index,]
+model_test = subset(model_test, select = -SalePrice)
+
+
 x <- as.matrix(subset(model_train, select = -LogSalePrice))
 y <- as.double(as.matrix(model_train[, "LogSalePrice"]))
 
@@ -764,7 +806,6 @@ cv <- cv.glmnet(x, y, family='gaussian', alpha = 1, nlambda = 100)
 fit = glmnet(x, y, family = "gaussian", alpha = 1, lambda = cv$lambda.1se)
 
 nx = model_test
-nx$SalePrice = NULL
 nx$LogSalePrice = NULL
 nx = as.matrix(nx)
 prediction_lasso <- predict.glmnet(fit, newx = nx)
@@ -776,26 +817,53 @@ head(pred)
 c(rmse_test = sqrt(mean(residuals^2)))
 
 
+#Now let's train the model with the whole training set
+model_train = subset(train.II, select = -SalePrice)
+x <- as.matrix(subset(model_train, select = -LogSalePrice))
+y <- as.double(as.matrix(model_train[, "LogSalePrice"]))
+
+set.seed(999)
+cv <- cv.glmnet(x, y, family='gaussian', alpha = 1, nlambda = 100)
+
+fit = glmnet(x, y, family = "gaussian", alpha = 1, lambda = cv$lambda.1se)
+
+
+
+#testing.set$Utilities = NULL
+#testing.set$SaleCondition = NULL
+cols = colnames(train.II)[-c(55, 56)]
+nx = subset(testing.set, select = cols)
+nx = as.matrix(nx)
+SalePriceLASSO <- predict.glmnet(fit, newx = nx)
+SalePrice <- exp(SalePriceRF)
+
+y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+head(y)
+
+# Save prediction to My_Submission.csv
+write.csv(y,file="My_Submission_LASSO.csv", quote = FALSE, row.names = FALSE)
+
 ```
 
-The choose of weights for each model depend on the RMSE of the model. lm had better RMSE that's why its weight is heigher.
+Combianing the two models, we get a better RMSE.
 
 ```{r}
-p = ((prediction_lm + prediction_rf)/2)
+p = (prediction_lm + prediction_rf)/2
 residuals <- model_test$LogSalePrice - p
 pred <- data.frame("Predicted" = p, "Actual" = model_test$LogSalePrice, "Residual" = residuals)
 head(pred)
 
 c(rmse_test = sqrt(mean(residuals^2)))
 ```
-Combianing the two models, we get a better RMSE.  
+
 Creating a final submission file combianing our two best models: linear model and random forest
 
 ```{r}
-SalePriceFinal <- (0.56*SalePriceLM + 0.44*SalePriceRF)
+SalePriceFinal <- ((SalePriceLM + SalePriceRF)/2)
 SalePrice <- exp(SalePriceFinal)
 
 y<-cbind(data.frame("Id"=1461:(1460+nrow(testing.set.full)), SalePrice))
+colnames(y) = c("Id", "SalePrice")
 head(y)
 
 # Save prediction to My_Submission.csv
